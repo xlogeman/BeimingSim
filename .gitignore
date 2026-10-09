@@ -1,0 +1,78 @@
+# Unreal Engine generated files
+Binaries/
+Build/
+DerivedDataCache/
+Intermediate/
+Saved/
+
+# Visual Studio generated files
+.vs/
+.vscode/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Visual Studio build artifacts
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Ww][Ii][Nn]32/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+
+# Visual Studio 2015/2017 cache/options directory
+.vs/
+
+# Rider
+.idea/
+*.sln.iml
+
+# Compiled Dynamic Libraries
+*.dylib
+*.dll
+*.so
+
+# Executables
+*.exe
+*.out
+*.app
+
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Packaged artifacts
+*.pak
+*.ipa
+*.apk
+
+# Whitelist Pak files (uncomment if needed)
+#!*.pak
+
+# Project-specific generated files
+*.code-workspace
+*.slnx
+*.sln
+
+# OS generated files
+.DS_Store
+Thumbs.db
