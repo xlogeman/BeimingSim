@@ -60,6 +60,12 @@ public:
 	void InitializeSensor();
 	bool Update(float delta_time, msr::airlib::vector<msr::airlib::real_T>& point_cloud, msr::airlib::vector<msr::airlib::real_T>& point_cloud_final);
 
+	// Returns the real render timestamps of the segments that make up the last
+	// completed pointcloud frame, and clears the internal copy. The segments are
+	// ordered by scan angle; each covers [start_angle, start_angle + sweep_angle]
+	// degrees in the sensor frame and was rendered at time_stamp (AirSim clock).
+	void getFrameSegmentStamps(msr::airlib::vector<msr::airlib::LidarSegmentStamp>& segment_stamps);
+
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "LidarCamera|Render")
 		int32 resolution_ = 1024;
 
@@ -140,13 +146,19 @@ private:
 	float pending_capture_rotation_ = 0;
 	int32 pending_capture_fov_ = 0;
 	bool pending_do_capture_ = false;
+	float pending_capture_start_angle_ = 0;
+	float pending_capture_sweep_ = 0;
 	float async_job_rotation_angle_ = 0;
 	float async_job_fov_ = 0;
+	// Real render timestamps of captured segments: accumulated over the frame,
+	// moved to completed_segment_stamps_ when the frame is completed.
+	msr::airlib::vector<msr::airlib::LidarSegmentStamp> frame_segment_stamps_;
+	msr::airlib::vector<msr::airlib::LidarSegmentStamp> completed_segment_stamps_;
 	TArray<FColor> async_buffer_2D_depth_;
 	TArray<FColor> async_buffer_2D_segmentation_;
 	TArray<FColor> async_buffer_2D_intensity_;
 	bool UpdateAsync(float delta_time, msr::airlib::vector<msr::airlib::real_T>& point_cloud, msr::airlib::vector<msr::airlib::real_T>& point_cloud_final);
-	void StartAsyncCapture(float capture_rotation, int32 cur_fov, bool do_capture);
+	void StartAsyncCapture(float capture_rotation, int32 cur_fov, bool do_capture, float start_angle, float sweep_angle);
 	void ServiceAsyncCapture();
 	bool ProcessCapturedBuffers(float sensor_rotation_angle, float fov, msr::airlib::vector<msr::airlib::real_T>& point_cloud, msr::airlib::vector<msr::airlib::real_T>& point_cloud_final);
 

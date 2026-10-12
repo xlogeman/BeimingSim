@@ -20,6 +20,7 @@ public:
 
 protected:
 	virtual bool getPointCloud(float delta_time, msr::airlib::vector<msr::airlib::real_T>& point_cloud, msr::airlib::vector<msr::airlib::real_T>& point_cloud_final) override;
+	virtual void getSegmentStamps(msr::airlib::vector<msr::airlib::LidarSegmentStamp>& segment_stamps) override;
 	virtual void pause(const bool is_paused);
 	virtual void getLocalPose(msr::airlib::Pose& sensor_pose);
 	virtual void applyPoseToActor(const msr::airlib::Pose& pose) const override;

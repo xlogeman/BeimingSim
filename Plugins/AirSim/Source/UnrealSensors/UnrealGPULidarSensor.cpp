@@ -49,6 +49,12 @@ bool UnrealGPULidarSensor::getPointCloud(float delta_time, msr::airlib::vector<m
 	return lidar_camera_->Update(delta_time, point_cloud, point_cloud_final);
 }
 
+// Get the real render timestamps of the segments that make up the last completed frame
+void UnrealGPULidarSensor::getSegmentStamps(msr::airlib::vector<msr::airlib::LidarSegmentStamp>& segment_stamps)
+{
+	lidar_camera_->getFrameSegmentStamps(segment_stamps);
+}
+
 // Get echo pose in Local NED
 void UnrealGPULidarSensor::getLocalPose(msr::airlib::Pose& sensor_pose)
 {

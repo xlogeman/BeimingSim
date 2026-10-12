@@ -11,6 +11,7 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #include "ImageUtils.h"
 #include "common/AirSimSettings.hpp"
+#include "common/ClockFactory.hpp"
 #include "api/WorldSimApiBase.hpp"
 #include "EngineUtils.h"
 #include "Annotation/ObjectAnnotator.h"
@@ -146,6 +147,13 @@ void ALidarCamera::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	capture_2D_intensity_ = nullptr;
 	render_target_2D_intensity_ = nullptr;
 	Super::EndPlay(EndPlayReason);
+}
+
+// Hand over the real render timestamps of the segments of the last completed frame
+void ALidarCamera::getFrameSegmentStamps(msr::airlib::vector<msr::airlib::LidarSegmentStamp>& segment_stamps)
+{
+	segment_stamps = completed_segment_stamps_;
+	completed_segment_stamps_.clear();
 }
 
 // Get all the settings from AirSim
@@ -409,7 +417,11 @@ bool ALidarCamera::UpdateAsync(float delta_time, msr::airlib::vector<msr::airlib
 
 		async_job_rotation_angle_ = sensor_sum_rotation_angle_;
 		async_job_fov_ = cur_fov;
-		StartAsyncCapture(capture_rotation, cur_fov, do_capture);
+		// sensor_cur_angle_ (after the update above) is the starting scan angle of
+		// this segment, async_job_rotation_angle_ the scan angle span it covers.
+		// They are stored with the pending capture so ServiceAsyncCapture can pair
+		// the real render time with the angular range the render actually covers.
+		StartAsyncCapture(capture_rotation, cur_fov, do_capture, sensor_cur_angle_, async_job_rotation_angle_);
 
 		// Set up the values for the next frame
 		sensor_prev_rotation_angle_ = sensor_sum_rotation_angle_;
@@ -418,11 +430,13 @@ bool ALidarCamera::UpdateAsync(float delta_time, msr::airlib::vector<msr::airlib
 	return refresh_pointcloud;
 }
 
-void ALidarCamera::StartAsyncCapture(float capture_rotation, int32 cur_fov, bool do_capture)
+void ALidarCamera::StartAsyncCapture(float capture_rotation, int32 cur_fov, bool do_capture, float start_angle, float sweep_angle)
 {
 	pending_capture_rotation_ = capture_rotation;
 	pending_capture_fov_ = cur_fov;
 	pending_do_capture_ = do_capture;
+	pending_capture_start_angle_ = start_angle;
+	pending_capture_sweep_ = sweep_angle;
 	async_capture_in_flight_ = true;
 }
 
@@ -443,6 +457,22 @@ void ALidarCamera::ServiceAsyncCapture()
 		capture_2D_depth_->CaptureScene();
 		capture_2D_segmentation_->CaptureScene();
 		capture_2D_intensity_->CaptureScene();
+
+		// Record the real render moment of this segment (same AirSim clock base as
+		// the output time_stamp, NOT UE world time) together with the scan angle
+		// range this rendered snapshot covers. This lets downstream consumers
+		// transform every point with the vehicle pose at its true capture moment.
+		if (used_by_airsim_) {
+			msr::airlib::LidarSegmentStamp segment_stamp;
+			segment_stamp.start_angle = pending_capture_start_angle_;
+			segment_stamp.sweep_angle = pending_capture_sweep_;
+			segment_stamp.time_stamp = msr::airlib::ClockFactory::get()->nowNanos();
+			frame_segment_stamps_.push_back(segment_stamp);
+			// Defensive cap: if frames never complete (e.g. no API consumer), don't grow unbounded
+			if (frame_segment_stamps_.size() > 256) {
+				frame_segment_stamps_.erase(frame_segment_stamps_.begin(), frame_segment_stamps_.begin() + 128);
+			}
+		}
 
 		FTextureRenderTarget2DResource* render_target_2D_depth = (FTextureRenderTarget2DResource*)capture_2D_depth_->TextureTarget->GetResource();
 		render_target_2D_depth->ReadPixels(async_buffer_2D_depth_);
@@ -529,12 +559,19 @@ bool ALidarCamera::ProcessCapturedBuffers(float sensor_rotation_angle, float fov
 							UE_LOG(LogTemp, Warning, TEXT("Pointcloud incorrect size! points:%i %f %f"), (int)(point_cloud.size() / 5), h_prev_angle, h_cur_angle);
 							point_cloud.clear();
 							refresh_pointcloud = false;
+							// Discarded frame: drop its segment stamps so the next completed
+							// frame only carries stamps of segments it actually contains
+							frame_segment_stamps_.clear();
 						}
 						// Else, save the completed pointcloud into the right array and clear the current one
 						else {
 							point_cloud_final = point_cloud;
 							point_cloud.clear();
 							refresh_pointcloud = true;
+							// Frame completed: hand the accumulated segment stamps over so
+							// the sensor can pick them up and report them with the output
+							completed_segment_stamps_ = frame_segment_stamps_;
+							frame_segment_stamps_.clear();
 						}
 					}
 				}

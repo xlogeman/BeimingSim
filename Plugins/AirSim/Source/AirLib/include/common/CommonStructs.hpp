@@ -435,11 +435,29 @@ namespace airlib
         }
     };
 
+    // Timestamp info of a single async capture segment of the GPU LiDAR.
+    // A segment is one rendered depth snapshot that covers the LiDAR scan angle
+    // range [start_angle, start_angle + sweep_angle] (degrees, sensor frame).
+    // time_stamp is the simulated time (msr::airlib::clock()->nowNanos()) at the
+    // moment the scene was rendered, i.e. the true capture moment of all points
+    // within that angular range.
+    struct LidarSegmentStamp {
+        float start_angle = 0;
+        float sweep_angle = 0;
+        TTimePoint time_stamp = 0;
+
+        LidarSegmentStamp()
+        {}
+    };
+
     struct GPULidarData {
 
         TTimePoint time_stamp = 0;
         vector<real_T> point_cloud;
         Pose pose;
+        // Real render timestamps per captured segment of the completed frame
+        // (empty for CPU Lidar and for captures that predate frame completion).
+        vector<LidarSegmentStamp> segment_stamps;
 
         GPULidarData()
         {}

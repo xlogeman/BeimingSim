@@ -688,14 +688,45 @@ namespace airlib_rpclib
             }
         };
 
+        struct LidarSegmentStamp {
+
+            float start_angle = 0;      // segment start scan angle (deg, sensor frame)
+            float sweep_angle = 0;      // scan angle span covered by the segment (deg)
+            msr::airlib::TTimePoint time_stamp = 0; // real render moment (AirSim clock)
+
+            MSGPACK_DEFINE_MAP(start_angle, sweep_angle, time_stamp);
+
+            LidarSegmentStamp()
+            {}
+
+            LidarSegmentStamp(const msr::airlib::LidarSegmentStamp& s)
+            {
+                start_angle = s.start_angle;
+                sweep_angle = s.sweep_angle;
+                time_stamp = s.time_stamp;
+            }
+
+            msr::airlib::LidarSegmentStamp to() const
+            {
+                msr::airlib::LidarSegmentStamp d;
+
+                d.start_angle = start_angle;
+                d.sweep_angle = sweep_angle;
+                d.time_stamp = time_stamp;
+
+                return d;
+            }
+        };
+
         struct GPULidarData {
 
             msr::airlib::TTimePoint time_stamp;    // timestamp
             std::vector<float> point_cloud;        // data
 
             Pose pose;
+            std::vector<LidarSegmentStamp> segment_stamps; // real render time per captured segment
 
-            MSGPACK_DEFINE_MAP(time_stamp, point_cloud, pose);
+            MSGPACK_DEFINE_MAP(time_stamp, point_cloud, pose, segment_stamps);
 
             GPULidarData()
             {}
@@ -709,6 +740,9 @@ namespace airlib_rpclib
                 if (point_cloud.size() == 0)
                     point_cloud.push_back(0);
                 pose = s.pose;
+                segment_stamps.reserve(s.segment_stamps.size());
+                for (const auto& seg : s.segment_stamps)
+                    segment_stamps.emplace_back(seg);
             }
 
             msr::airlib::GPULidarData to() const
@@ -718,6 +752,9 @@ namespace airlib_rpclib
                 d.time_stamp = time_stamp;
                 d.point_cloud = point_cloud;
                 d.pose = pose.to();
+                d.segment_stamps.reserve(segment_stamps.size());
+                for (const auto& seg : segment_stamps)
+                    d.segment_stamps.push_back(seg.to());
 
                 return d;
             }

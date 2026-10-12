@@ -87,6 +87,15 @@ namespace msr {
 		protected:
 			virtual bool getPointCloud(float delta_time, vector<real_T>& point_cloud, vector<real_T>& point_cloud_final) = 0;
 
+			// Optional hook for implementations that know the real render time of each
+			// captured segment (e.g. UnrealGPULidarSensor's async capture pipeline).
+			// Implementations must clear the list when no timestamps are available.
+			// Called on the game thread right after a frame completed.
+			virtual void getSegmentStamps(vector<LidarSegmentStamp>& segment_stamps)
+			{
+				segment_stamps.clear();
+			}
+
 			virtual void pause(const bool is_paused) = 0;
 
 			virtual void getLocalPose(Pose& sensor_pose) = 0;
@@ -110,6 +119,9 @@ namespace msr {
 					GPULidarData output;
 					output.point_cloud = point_cloud_;
 					output.time_stamp = clock()->nowNanos();
+					// Attach the real render timestamps of the segments that make up
+					// this completed frame (empty if the implementation has none).
+					getSegmentStamps(output.segment_stamps);
 					const GroundTruth& ground_truth = getGroundTruth();
 					Pose lidar_pose = params_.relative_pose;
 					if (params_.external && params_.external_ned) {
