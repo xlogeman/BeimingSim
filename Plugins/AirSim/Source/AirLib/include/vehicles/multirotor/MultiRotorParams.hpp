@@ -70,6 +70,8 @@ namespace airlib
 
             setupParams();
 
+            applyPhysicsParamsFromSettings(vehicle_setting);
+
             addSensorsFromSettings(vehicle_setting);
         }
 
@@ -95,6 +97,108 @@ namespace airlib
             const auto& sensor_settings = vehicle_setting->sensors;
 
             getSensorFactory()->createSensorsFromSettings(sensor_settings, sensors_, sensor_storage_);
+        }
+
+        // Applies physics parameter overrides from the vehicle's "PhysicsParams" section in
+        // settings.json on top of the hardcoded frame params set by setupParams().
+        // Supported keys (all optional, unknown keys are ignored):
+        //   Mass                 total vehicle mass in kg (inertia recomputed accordingly)
+        //   MotorAssemblyWeight  weight of one motor+ESC+prop assembly in kg (default 0.055)
+        //   RotorCount           4 (QuadX), 6 (HexX) or 8 (OctoX); rebuilds rotor poses
+        //   ArmLengths           distance from center of mass to each motor in meters
+        //   RotorZ               motor z-offset relative to center of mass in meters
+        //   BodyBoxX/Y/Z         core body box dimensions in meters (affects inertia)
+        //   CT / CP / MaxRPM / PropDiameter  rotor parameters; max thrust is recomputed
+        //   DragCoefficient      linear drag coefficient (angular drag is left unchanged)
+        void applyPhysicsParamsFromSettings(const AirSimSettings::VehicleSetting* vehicle_setting)
+        {
+            if (vehicle_setting == nullptr || vehicle_setting->physics_params.empty())
+                return;
+
+            const auto& overrides = vehicle_setting->physics_params;
+            auto findValue = [&overrides](const std::string& key) -> const real_T* {
+                auto it = overrides.find(key);
+                return it == overrides.end() ? nullptr : &it->second;
+            };
+
+            Params& params = getParams();
+
+            //mass
+            if (const real_T* v = findValue("Mass"))
+                params.mass = *v;
+            real_T motor_assembly_weight = 0.055f;
+            if (const real_T* v = findValue("MotorAssemblyWeight"))
+                motor_assembly_weight = *v;
+
+            //core body box
+            if (const real_T* v = findValue("BodyBoxX"))
+                params.body_box.x() = *v;
+            if (const real_T* v = findValue("BodyBoxY"))
+                params.body_box.y() = *v;
+            if (const real_T* v = findValue("BodyBoxZ"))
+                params.body_box.z() = *v;
+
+            //rotor layout: rebuild poses if count / arm length / height were overridden
+            uint rotor_count = params.rotor_count;
+            real_T arm_length = params.rotor_poses.empty()
+                                    ? 0.2f
+                                    : static_cast<real_T>(std::sqrt(
+                                          std::pow(params.rotor_poses[0].position.x(), 2) +
+                                          std::pow(params.rotor_poses[0].position.y(), 2)));
+            real_T rotor_z = params.rotor_poses.empty() ? 0.0f : params.rotor_poses[0].position.z();
+            bool rebuild_rotors = false;
+            if (const real_T* v = findValue("RotorCount")) {
+                rotor_count = static_cast<uint>(*v);
+                rebuild_rotors = true;
+            }
+            if (const real_T* v = findValue("ArmLengths")) {
+                arm_length = *v;
+                rebuild_rotors = true;
+            }
+            if (const real_T* v = findValue("RotorZ")) {
+                rotor_z = *v;
+                rebuild_rotors = true;
+            }
+            if (rebuild_rotors) {
+                std::vector<real_T> arm_lengths(rotor_count, arm_length);
+                if (rotor_count == 4)
+                    initializeRotorQuadX(params.rotor_poses, rotor_count, arm_lengths.data(), rotor_z);
+                else if (rotor_count == 6)
+                    initializeRotorHexX(params.rotor_poses, rotor_count, arm_lengths.data(), rotor_z);
+                else if (rotor_count == 8)
+                    initializeRotorOctoX(params.rotor_poses, rotor_count, arm_lengths.data(), rotor_z);
+                else
+                    throw std::invalid_argument("PhysicsParams: RotorCount must be 4, 6 or 8");
+            }
+
+            //rotor parameters
+            bool rotor_params_changed = false;
+            if (const real_T* v = findValue("CT")) {
+                params.rotor_params.C_T = *v;
+                rotor_params_changed = true;
+            }
+            if (const real_T* v = findValue("CP")) {
+                params.rotor_params.C_P = *v;
+                rotor_params_changed = true;
+            }
+            if (const real_T* v = findValue("MaxRPM")) {
+                params.rotor_params.max_rpm = *v;
+                rotor_params_changed = true;
+            }
+            if (const real_T* v = findValue("PropDiameter")) {
+                params.rotor_params.propeller_diameter = *v;
+                rotor_params_changed = true;
+            }
+            if (rotor_params_changed)
+                params.rotor_params.calculateMaxThrust();
+
+            //drag
+            if (const real_T* v = findValue("DragCoefficient"))
+                params.linear_drag_coefficient = *v;
+
+            //inertia depends on mass, body box and rotor positions -> always recompute
+            real_T box_mass = params.mass - rotor_count * motor_assembly_weight;
+            computeInertiaMatrix(params.inertia, params.body_box, params.rotor_poses, box_mass, motor_assembly_weight);
         }
 
     protected: //static utility functions for derived classes to use

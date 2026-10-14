@@ -433,6 +433,10 @@ namespace airlib
 
             RCSettings rc;
 
+            //optional physics parameters overriding the hardcoded frame params
+            //parsed from the vehicle's "PhysicsParams" section in settings.json
+            std::map<std::string, real_T> physics_params;
+
             VehicleSetting()
             {
             }
@@ -1057,6 +1061,16 @@ namespace airlib
                                                                     vehicle_setting->is_fpv_vehicle);
 
             loadRCSetting(simmode_name, settings_json, vehicle_setting->rc);
+
+            //optional physics parameter overrides (mass, rotor params, etc.)
+            Settings physics_params_json;
+            if (settings_json.getChild("PhysicsParams", physics_params_json)) {
+                std::vector<std::string> keys;
+                physics_params_json.getChildNames(keys);
+                for (auto key : keys) {
+                    vehicle_setting->physics_params[key] = physics_params_json.getFloat(key, 0);
+                }
+            }
 
             vehicle_setting->position = createVectorSetting(settings_json, vehicle_setting->position);
             vehicle_setting->rotation = createRotationSetting(settings_json, vehicle_setting->rotation);
