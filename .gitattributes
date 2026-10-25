@@ -1,0 +1,22 @@
+# Unreal Engine 二进制资产用 Git LFS 存储（必须先于 git add 配置）
+*.uasset filter=lfs diff=lfs merge=lfs -text
+*.umap filter=lfs diff=lfs merge=lfs -text
+
+# 其他常见大型二进制资源
+*.fbx filter=lfs diff=lfs merge=lfs -text
+*.png filter=lfs diff=lfs merge=lfs -text
+*.jpg filter=lfs diff=lfs merge=lfs -text
+*.jpeg filter=lfs diff=lfs merge=lfs -text
+*.wav filter=lfs diff=lfs merge=lfs -text
+*.mp3 filter=lfs diff=lfs merge=lfs -text
+*.mp4 filter=lfs diff=lfs merge=lfs -text
+*.ttf filter=lfs diff=lfs merge=lfs -text
+*.otf filter=lfs diff=lfs merge=lfs -text
+
+# 统一换行符处理：文本文件按 LF 入库
+*.cpp text
+*.h text
+*.cs text
+*.ini text
+*.uproject text
+*.md text

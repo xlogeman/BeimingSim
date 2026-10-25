@@ -76,3 +76,10 @@ bld/
 # OS generated files
 .DS_Store
 Thumbs.db
+
+# Visual Studio / MSVC 补充（UE 项目常见）
+*.VC.db
+*.VC.opendb
+ipch/
+*.ipch
+UpgradeLog*.htm
