@@ -5,6 +5,9 @@ DerivedDataCache/
 Intermediate/
 Saved/
 
+# 打包输出目录
+BeimingSim_Build/
+
 # Visual Studio generated files
 .vs/
 .vscode/

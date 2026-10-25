@@ -192,6 +192,18 @@ void AWalkerNPC::SetWalkingVisuals(bool bWalking)
 	if (UAnimSingleNodeInstance* SingleNode = Cast<UAnimSingleNodeInstance>(GetMesh()->GetAnimInstance()))
 	{
 		SingleNode->SetLooping(true);
+
+		// 打包(Cooked)版本中 OverrideAnimationData 可能未真正把资产写入单节点实例，
+		// 表现为 NPC 以参考姿势平移滑动。这里校验并强制补设一次，
+		// 保证编辑器与打包版行为一致。
+		if (SingleNode->GetAnimationAsset() != TargetAnim)
+		{
+			SingleNode->SetAnimationAsset(TargetAnim, /*bInIsLooping*/ true,
+				/*InPlayRate*/ bWalking ? WalkAnimPlayRate : 1.0f);
+			SingleNode->SetPosition(0.0f);
+			SingleNode->SetPlaying(true);
+			SingleNode->SetLooping(true);
+		}
 	}
 }
 
