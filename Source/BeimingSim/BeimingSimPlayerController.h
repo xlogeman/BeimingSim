@@ -26,15 +26,15 @@ public:
     UFUNCTION(BlueprintCallable, Category = "BeimingSim|FreeFly")
     void ToggleFreeFlyCamera();
 
+    /** 自由视角空闲态输入模式：光标可见、仅右键按下可触发捕获（供 FreeFlyCameraPawn 在松开右键时调用） */
+    void ApplyFreeFlyIdleInputMode();
+
 protected:
     UPROPERTY(Transient)
     TObjectPtr<class AFreeFlyCameraPawn> FreeFlyPawn;
 
     UPROPERTY(Transient)
     TObjectPtr<APawn> SavedVehiclePawn;
-
-    /** 进入自由视角前的视口鼠标捕获模式，退出时恢复 */
-    EMouseCaptureMode SavedMouseCaptureMode = EMouseCaptureMode::NoCapture;
 
     bool bFreeFlyActive = false;
 };

@@ -47,19 +47,15 @@ void ABeimingSimPlayerController::ToggleFreeFlyCamera()
         FreeFlyPawn->SetActorLocationAndRotation(SpawnLoc, SpawnRot);
         SavedVehiclePawn = CurrentPawn;
 
-        // 项目配置为 NoCapture（光标不被锁定），但引擎在无捕获时
-        // 既不下发鼠标按键事件、也不累积 MouseX/Y 位移。
-        // 自由视角期间临时启用"按住右键捕获"，退出时恢复原模式。
-        if (UGameViewportClient* GameViewport = GetWorld()->GetGameViewport())
-        {
-            SavedMouseCaptureMode = GameViewport->GetMouseCaptureMode();
-            GameViewport->SetMouseCaptureMode(EMouseCaptureMode::CaptureDuringRightMouseDown);
-        }
-
         Possess(FreeFlyPawn);
         SetViewTarget(FreeFlyPawn);
         SetControlRotation(SpawnRot);
-        bShowMouseCursor = true;
+
+        // 自由视角空闲态：光标可见、仅右键可触发捕获（见 ApplyFreeFlyIdleInputMode）。
+        // 按住右键期间由 AFreeFlyCameraPawn::SetLookActive 切到 GameOnly 模式
+        // （高精度原始输入 + 光标锁定，位移不受屏幕边界限制），松开右键切回空闲态。
+        ApplyFreeFlyIdleInputMode();
+
         bFreeFlyActive = true;
         UE_LOG(LogTemp, Log, TEXT("FreeFlyCamera: 已切换到自由视角（F9 切回载具）"));
     }
@@ -90,14 +86,35 @@ void ABeimingSimPlayerController::ToggleFreeFlyCamera()
             }
         }
         SavedVehiclePawn = nullptr;
-        bShowMouseCursor = true;
         bFreeFlyActive = false;
 
-        // 恢复进入前的鼠标捕获模式（NoCapture）
+        // 恢复项目默认输入行为：无捕获、光标可见。
+        // GameAndUI 的 ApplyInputMode 内部会 ReleaseMouseCapture 并把锁定行为
+        // 设为 DoNotLock，从而解除自由视角遗留的高精度/锁定状态。
+        SetInputMode(FInputModeGameAndUI());
+        bShowMouseCursor = true;
         if (UGameViewportClient* GameViewport = GetWorld()->GetGameViewport())
         {
-            GameViewport->SetMouseCaptureMode(SavedMouseCaptureMode);
+            GameViewport->SetMouseCaptureMode(EMouseCaptureMode::NoCapture);
         }
         UE_LOG(LogTemp, Log, TEXT("FreeFlyCamera: 已切回载具视角"));
+    }
+}
+
+void ABeimingSimPlayerController::ApplyFreeFlyIdleInputMode()
+{
+    // 自由视角空闲态的输入模式：
+    // 1. GameAndUI：解除 GameOnly 遗留的高精度鼠标/光标锁定/永久捕获
+    //    （ApplyInputMode 内部 ReleaseMouseCapture、锁定行为 DoNotLock），光标恢复显示；
+    // 2. 捕获模式改为"仅右键按下时捕获"：不能保持 NoCapture——引擎在无捕获且
+    //    捕获模式不匹配时不会把鼠标按键事件下发给游戏输入
+    //    （见 FSceneViewport::OnMouseButtonDown 的 bTemporaryCapture/bProcessInputPrimary），
+    //    右键按下就永远到不了 Pawn 的 BindKey 回调。
+    // 按住右键后由 SetLookActive(true) 切到 GameOnly（高精度+锁定，位移无边界）。
+    SetInputMode(FInputModeGameAndUI());
+    bShowMouseCursor = true;
+    if (UGameViewportClient* GameViewport = GetWorld()->GetGameViewport())
+    {
+        GameViewport->SetMouseCaptureMode(EMouseCaptureMode::CaptureDuringRightMouseDown);
     }
 }

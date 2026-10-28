@@ -63,9 +63,9 @@ void AFreeFlyCameraPawn::Tick(float DeltaSeconds)
         }
         else
         {
-            // 视口未捕获鼠标（编辑器 PIE 关闭"游戏接管鼠标"等）：光标是隐形地
-            // 在屏幕上移动的，到屏幕边缘就没有位移、视角卡死。
-            // 改用光标归中法：把光标拉回视口中心，用偏移量作为旋转量。
+            // 兜底：捕获未生效时（右键按下事件未触发 Slate 自动捕获），位移来自
+            // 光标位置差。改用光标归中法：把光标拉回视口中心，用偏移量作为旋转量。
+            // 正常情况下不会走到这里——捕获生效时引擎已锁定光标并锁定到位移累积。
             if (ViewportClient && ViewportClient->Viewport)
             {
                 const FIntPoint Size = ViewportClient->Viewport->GetSizeXY();
@@ -162,10 +162,32 @@ void AFreeFlyCameraPawn::SetLookActive(bool bActive)
         bSkipNextLookDelta = true;
     }
 
-    // 编辑器风格：按住右键旋转时隐藏光标
-    if (APlayerController* PC = Cast<APlayerController>(GetController()))
+    // 编辑器风格：按住右键期间切换输入模式。
+    // 按下：GameOnly（UseHighPrecisionMouseMovement + LockMouseToWidget +
+    // CapturePermanently，见 FInputModeGameOnly::ApplyInputMode）——
+    // 光标隐藏锁定，位移为原始输入，不受屏幕边界限制。
+    // 这些操作写入 LocalPlayer 待处理 Slate 队列，由主循环每帧通过
+    // ProcessExternalReply 应用，不依赖输入事件，同一帧内即可生效。
+    // 松开：切回空闲态（光标可见、仅右键可触发捕获）。
+    // 注意：不要在这里自己设置 bShowMouseCursor——按下时光标可见才能让
+    // 引擎的点击捕获启用光标锁定（bCursorHiddenDueToCapture），光标的
+    // 隐藏/恢复由引擎捕获机制与 GameOnly 锁定共同完成。
+    APlayerController* PC = Cast<APlayerController>(GetController());
+    if (!PC)
     {
-        PC->bShowMouseCursor = !bActive;
+        return;
+    }
+
+    if (bActive)
+    {
+        PC->SetInputMode(FInputModeGameOnly());
+    }
+    else
+    {
+        if (ABeimingSimPlayerController* BeimingPC = Cast<ABeimingSimPlayerController>(PC))
+        {
+            BeimingPC->ApplyFreeFlyIdleInputMode();
+        }
     }
 }
 
