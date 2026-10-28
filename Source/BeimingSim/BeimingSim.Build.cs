@@ -7,7 +7,11 @@ public class BeimingSim : ModuleRules
 	public BeimingSim(ReadOnlyTargetRules Target) : base(Target)
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
-	
+
+		// 本模块包含 AirSim 头文件（如 AirLib 的 FileSystem.hpp 使用 try/catch），
+		// 打包的游戏目标默认禁用 C++ 异常，需显式开启（与 AirSim 模块一致）。
+		bEnableExceptions = true;
+
 		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput", "AirSim" });
 
 		PrivateDependencyModuleNames.AddRange(new string[] { "AIModule", "NavigationSystem", "GameplayTasks" });
