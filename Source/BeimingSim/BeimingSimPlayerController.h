@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerController.h"
+#include "AirSimCameraDirector.h"
 #include "BeimingSimPlayerController.generated.h"
 
 /**
@@ -37,4 +38,11 @@ protected:
     TObjectPtr<APawn> SavedVehiclePawn;
 
     bool bFreeFlyActive = false;
+
+    /** 进入自由视角前 CameraDirector 所处的视图模式（如 SpringArmChase 追拍），退出时恢复 */
+    ECameraDirectorMode SavedDirectorMode = ECameraDirectorMode::CAMERA_DIRECTOR_MODE_FPV;
+    bool bSavedDirectorModeValid = false;
+
+    /** 按记录的视图模式恢复 CameraDirector（调用对应的 inputEventXxxView） */
+    void RestoreCameraDirectorView(class AAirSimCameraDirector* Director);
 };

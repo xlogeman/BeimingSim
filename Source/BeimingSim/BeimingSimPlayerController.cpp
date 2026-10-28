@@ -25,10 +25,28 @@ void ABeimingSimPlayerController::ToggleFreeFlyCamera()
 {
     if (!bFreeFlyActive)
     {
-        // 进入自由视角：记录当前载具，把自由相机放到载具当前位置
+        // 记录进入前 CameraDirector 的视图模式（如飞机后方的 SpringArmChase 追拍），
+        // 按 F9 退出时原样恢复，而不是固定切到机身 FPV。
+        bSavedDirectorModeValid = false;
+        for (TActorIterator<AAirSimCameraDirector> It(GetWorld()); It; ++It)
+        {
+            SavedDirectorMode = It->getMode();
+            bSavedDirectorModeValid = true;
+            break;
+        }
+
+        // 出生点用"当前屏幕上实际渲染的相机"位置：追拍视角下即飞机后方的相机处，
+        // 自由视角从相机所在位置无缝开始，而不是跳到机身里。
+        FVector SpawnLoc = FVector::ZeroVector;
+        FRotator SpawnRot = FRotator::ZeroRotator;
+        GetPlayerViewPoint(SpawnLoc, SpawnRot);
+
         APawn* CurrentPawn = GetPawn();
-        const FVector SpawnLoc = CurrentPawn ? CurrentPawn->GetActorLocation() : GetFocalLocation();
-        const FRotator SpawnRot = CurrentPawn ? CurrentPawn->GetActorRotation() : GetControlRotation();
+        if (SpawnLoc.IsNearlyZero())
+        {
+            SpawnLoc = CurrentPawn ? CurrentPawn->GetActorLocation() : GetFocalLocation();
+            SpawnRot = CurrentPawn ? CurrentPawn->GetActorRotation() : GetControlRotation();
+        }
 
         if (!IsValid(FreeFlyPawn))
         {
@@ -66,27 +84,36 @@ void ABeimingSimPlayerController::ToggleFreeFlyCamera()
         {
             Possess(SavedVehiclePawn);
 
-            // 恢复机载 FPV 相机视角。直接 SetViewTarget(载具) 会落到 Pawn 上
-            // 默认激活的相机（AirSim 的后方追拍 ChaseCamera），这里找到跟随该载具的
-            // CameraDirector 并触发其 FPV 模式（内部会 SetViewTarget 到机载相机）。
-            bool bRestoredFpv = false;
+            // 恢复进入自由视角前的视图模式（如飞机后方的 SpringArmChase 追拍视角）。
+            // inputEventXxxView 内部会 setMode + showToScreen（SetViewTarget 到对应相机）。
+            // 仅当找不到 Director 或没有记录时，才退回载具默认相机。
+            bool bRestored = false;
             for (TActorIterator<AAirSimCameraDirector> It(GetWorld()); It; ++It)
             {
-                APIPCamera* FpvCam = It->getFpvCamera();
-                if (FpvCam && FpvCam->IsAttachedTo(SavedVehiclePawn))
+                if (bSavedDirectorModeValid)
                 {
-                    It->inputEventFpvView();
-                    bRestoredFpv = true;
-                    break;
+                    RestoreCameraDirectorView(*It);
+                    bRestored = true;
                 }
+                else
+                {
+                    APIPCamera* FpvCam = It->getFpvCamera();
+                    if (FpvCam && FpvCam->IsAttachedTo(SavedVehiclePawn))
+                    {
+                        It->inputEventFpvView();
+                        bRestored = true;
+                    }
+                }
+                break;
             }
-            if (!bRestoredFpv)
+            if (!bRestored)
             {
                 SetViewTarget(SavedVehiclePawn);
             }
         }
         SavedVehiclePawn = nullptr;
         bFreeFlyActive = false;
+        bSavedDirectorModeValid = false;
 
         // 恢复项目默认输入行为：无捕获、光标可见。
         // GameAndUI 的 ApplyInputMode 内部会 ReleaseMouseCapture 并把锁定行为
@@ -98,6 +125,21 @@ void ABeimingSimPlayerController::ToggleFreeFlyCamera()
             GameViewport->SetMouseCaptureMode(EMouseCaptureMode::NoCapture);
         }
         UE_LOG(LogTemp, Log, TEXT("FreeFlyCamera: 已切回载具视角"));
+    }
+}
+
+void ABeimingSimPlayerController::RestoreCameraDirectorView(AAirSimCameraDirector* Director)
+{
+    switch (SavedDirectorMode)
+    {
+    case ECameraDirectorMode::CAMERA_DIRECTOR_MODE_FPV:              Director->inputEventFpvView(); break;
+    case ECameraDirectorMode::CAMERA_DIRECTOR_MODE_GROUND_OBSERVER:  Director->inputEventGroundView(); break;
+    case ECameraDirectorMode::CAMERA_DIRECTOR_MODE_FLY_WITH_ME:      Director->inputEventFlyWithView(); break;
+    case ECameraDirectorMode::CAMERA_DIRECTOR_MODE_MANUAL:           Director->inputEventManualView(); break;
+    case ECameraDirectorMode::CAMERA_DIRECTOR_MODE_SPRINGARM_CHASE:  Director->inputEventSpringArmChaseView(); break;
+    case ECameraDirectorMode::CAMERA_DIRECTOR_MODE_BACKUP:           Director->inputEventBackupView(); break;
+    case ECameraDirectorMode::CAMERA_DIRECTOR_MODE_NODISPLAY:        Director->inputEventNoDisplayView(); break;
+    case ECameraDirectorMode::CAMERA_DIRECTOR_MODE_FRONT:            Director->inputEventFrontView(); break;
     }
 }
 
