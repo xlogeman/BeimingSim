@@ -2,8 +2,8 @@
 
 #include "WalkerAIController.h"
 
-#include "WalkerNPC.h"
-#include "WalkerWaypoint.h"
+#include "Walker/WalkerNPC.h"
+#include "Walker/WalkerWaypoint.h"
 #include "NavigationSystem.h"
 #include "Navigation/PathFollowingComponent.h"
 #include "TimerManager.h"

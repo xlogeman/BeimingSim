@@ -1,6 +1,6 @@
 #include "BeimingSimGameMode.h"
-#include "BeimingSimPlayerController.h"
-#include "DroneModelSwitcher.h"
+#include "Core/BeimingSimPlayerController.h"
+#include "Drone/DroneModelSwitcher.h"
 #include "Engine/World.h"
 
 ABeimingSimGameMode::ABeimingSimGameMode(const FObjectInitializer& ObjectInitializer)

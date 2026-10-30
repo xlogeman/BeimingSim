@@ -1,5 +1,5 @@
 #include "DroneModelSwitcher.h"
-#include "DroneSwitchWidget.h"
+#include "Drone/DroneSwitchWidget.h"
 #include "EngineUtils.h"
 #include "Engine/World.h"
 #include "Engine/Blueprint.h"

@@ -1,5 +1,5 @@
 #include "FreeFlyCameraPawn.h"
-#include "BeimingSimPlayerController.h"
+#include "Core/BeimingSimPlayerController.h"
 #include "Components/CapsuleComponent.h"
 #include "Camera/CameraComponent.h"
 #include "GameFramework/FloatingPawnMovement.h"

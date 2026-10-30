@@ -2,8 +2,8 @@
 
 #include "WalkerNPC.h"
 
-#include "WalkerAIController.h"
-#include "WalkerWaypoint.h"
+#include "Walker/WalkerAIController.h"
+#include "Walker/WalkerWaypoint.h"
 #include "Components/ArrowComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"

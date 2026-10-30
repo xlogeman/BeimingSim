@@ -1,5 +1,5 @@
 #include "BeimingSimPlayerController.h"
-#include "FreeFlyCameraPawn.h"
+#include "Camera/FreeFlyCameraPawn.h"
 #include "Engine/World.h"
 #include "Engine/GameViewportClient.h"
 #include "EngineUtils.h"

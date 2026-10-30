@@ -4,7 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "AIController.h"
-#include "WalkerNPC.h"
+#include "Walker/WalkerNPC.h"
 #include "WalkerAIController.generated.h"
 
 /**
