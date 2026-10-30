@@ -8,8 +8,9 @@ Saved/
 # 打包输出目录
 BeimingSim_Build/
 
-# 游戏资产不入库（体积过大，通过其他方式同步），AirSim 插件资产除外
-/Content/
+# 游戏资产不入库（体积过大，通过其他方式同步），UAV 无人机模型与 AirSim 插件资产除外
+/Content/*
+!/Content/UAV/
 
 # Visual Studio generated files
 .vs/
