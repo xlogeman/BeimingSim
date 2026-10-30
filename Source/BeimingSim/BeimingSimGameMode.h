@@ -15,4 +15,7 @@ class BEIMINGSIM_API ABeimingSimGameMode : public AAirSimGameMode
 
 public:
     ABeimingSimGameMode(const FObjectInitializer& ObjectInitializer);
+
+    /** 生成机型热切换器（Tab 呼出侧滑菜单，运行时替换无人机外观） */
+    virtual void BeginPlay() override;
 };
