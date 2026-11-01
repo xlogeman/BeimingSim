@@ -10,6 +10,9 @@
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/RotatingMovementComponent.h"
 #include "Blueprint/UserWidget.h"
+#include "Components/SceneCaptureComponent2D.h"
+#include "Engine/TextureRenderTarget2D.h"
+#include "TimerManager.h"
 
 // AirSim 多旋翼 Pawn（Rotation0~3 旋翼组件由其蓝图定义）
 #include "Vehicles/Multirotor/FlyingPawn.h"
@@ -32,6 +35,10 @@ void ADroneModelSwitcher::BeginPlay()
         GEngine->AddOnScreenDebugMessage((uint64)GetUniqueID(), 10.f, FColor::Cyan,
             TEXT("按 Tab 打开机型选择菜单"));
     }
+
+    // 延迟一帧多，等关卡与渲染状态就绪后再生成预览缩略图
+    GetWorldTimerManager().SetTimer(ThumbnailTimer, this,
+        &ADroneModelSwitcher::GenerateThumbnails, 0.25f, false);
 }
 
 void ADroneModelSwitcher::DiscoverModels()
@@ -64,6 +71,9 @@ void ADroneModelSwitcher::DiscoverModels()
 
     TArray<FAssetData> Assets;
     Registry->GetAssets(Filter, Assets);
+
+    TArray<FString> TempNames;
+    TArray<TSoftObjectPtr<UBlueprint>> TempBlueprints;
     for (const FAssetData& Asset : Assets)
     {
         const UBlueprint* Blueprint = Cast<UBlueprint>(Asset.GetAsset());
@@ -74,15 +84,110 @@ void ADroneModelSwitcher::DiscoverModels()
         // 只要 AirSim 飞行 Pawn 的子类
         if (Blueprint->GeneratedClass->IsChildOf(AFlyingPawn::StaticClass()))
         {
-            DiscoveredBlueprints.Add(TSoftObjectPtr<UBlueprint>(Asset.ToSoftObjectPath()));
+            TempBlueprints.Add(TSoftObjectPtr<UBlueprint>(Asset.ToSoftObjectPath()));
             // 显示名取蓝图资产名（BP_X450 -> X450）
             FString Name = Asset.AssetName.ToString();
             Name.RemoveFromStart(TEXT("BP_"));
-            DisplayNames.Add(Name);
-            UE_LOG(LogTemp, Log, TEXT("DroneSwitcher: 发现机型 %s (%s)"),
-                *Name, *Asset.GetSoftObjectPath().ToString());
+            TempNames.Add(Name);
         }
     }
+
+    // 按显示名字母序排序（不区分大小写），菜单展示与索引对应关系保持一致
+    TArray<int32> Order;
+    for (int32 i = 0; i < TempNames.Num(); ++i)
+    {
+        Order.Add(i);
+    }
+    Order.Sort([&TempNames](int32 A, int32 B)
+    {
+        return FCString::Stricmp(*TempNames[A], *TempNames[B]) < 0;
+    });
+    for (int32 Idx : Order)
+    {
+        DiscoveredBlueprints.Add(TempBlueprints[Idx]);
+        DisplayNames.Add(TempNames[Idx]);
+        UE_LOG(LogTemp, Log, TEXT("DroneSwitcher: 发现机型 %s (%s)"),
+            *TempNames[Idx], *TempBlueprints[Idx].ToSoftObjectPath().ToString());
+    }
+}
+
+void ADroneModelSwitcher::GenerateThumbnails()
+{
+    if (!GetWorld())
+    {
+        return;
+    }
+    ModelThumbnails.Reset();
+
+    // 阶段 1：先生成全部临时实例（远离场景的高空），等一拍再拍，
+    // 避免同帧生成+拍照时网格渲染代理尚未就绪拍到黑图
+    TempInstances.Reset();
+    const FVector SpawnLoc(0.0, 0.0, 5000.0);
+    for (int32 i = 0; i < DiscoveredBlueprints.Num(); ++i)
+    {
+        AActor* Source = nullptr;
+        UBlueprint* Blueprint = DiscoveredBlueprints[i].LoadSynchronous();
+        if (Blueprint && Blueprint->GeneratedClass)
+        {
+            FActorSpawnParameters Params;
+            Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+            Params.ObjectFlags |= RF_Transient;
+            Source = GetWorld()->SpawnActor<AActor>(Blueprint->GeneratedClass, FTransform(SpawnLoc), Params);
+        }
+        TempInstances.Add(Source);
+    }
+    GetWorldTimerManager().SetTimer(ThumbnailTimer, this,
+        &ADroneModelSwitcher::CapturePendingThumbnails, 0.2f, false);
+}
+
+void ADroneModelSwitcher::CapturePendingThumbnails()
+{
+    // 阶段 2：逐个拍照、销毁临时实例并更新菜单
+    for (int32 i = 0; i < TempInstances.Num(); ++i)
+    {
+        UTextureRenderTarget2D* Thumb = nullptr;
+        if (TempInstances[i])
+        {
+            Thumb = CaptureThumbnail(TempInstances[i]);
+            TempInstances[i]->Destroy();
+        }
+        ModelThumbnails.Add(Thumb);
+        if (MenuWidget)
+        {
+            MenuWidget->SetEntryThumbnail(i, Thumb);
+        }
+    }
+    TempInstances.Reset();
+}
+
+UTextureRenderTarget2D* ADroneModelSwitcher::CaptureThumbnail(AActor* Source) const
+{
+    UTextureRenderTarget2D* RT = NewObject<UTextureRenderTarget2D>(GetTransientPackage());
+    RT->ClearColor = FLinearColor(0.02f, 0.03f, 0.06f, 1.f);
+    RT->InitAutoFormat(256, 256);
+    RT->UpdateResourceImmediate(true);
+
+    USceneCaptureComponent2D* Capture = NewObject<USceneCaptureComponent2D>(Source);
+    Capture->TextureTarget = RT;
+    // 根据包围盒自适应取景距离（系数越小模型在预览图中越大），约 3/4 俯视角度
+    const FBox Bounds = Source->GetComponentsBoundingBox();
+    const float Radius = FMath::Max3(Bounds.GetExtent().X, Bounds.GetExtent().Y, Bounds.GetExtent().Z);
+    const float Dist = FMath::Clamp(Radius * 2.2f, 60.f, 400.f);
+    const FVector Center = Bounds.GetCenter();
+    const FVector Offset = FVector(-0.7f, -0.6f, 0.45f).GetSafeNormal() * Dist;
+    Capture->SetWorldLocationAndRotation(Center + Offset, (-Offset).Rotation());
+    Capture->FOVAngle = 60.f;
+    Capture->CaptureSource = ESceneCaptureSource::SCS_FinalColorLDR;
+    Capture->bCaptureEveryFrame = false;
+    Capture->bCaptureOnMovement = false;
+    Capture->bAlwaysPersistRenderingState = true;
+    // 只渲染该机型实例，背景为 ClearColor，得到干净的预览图
+    Capture->PrimitiveRenderMode = ESceneCapturePrimitiveRenderMode::PRM_UseShowOnlyList;
+    Capture->ShowOnlyActors.Add(Source);
+    Capture->RegisterComponent();
+    Capture->CaptureScene();
+
+    return RT;
 }
 
 void ADroneModelSwitcher::CreateWidgetInternal()
@@ -153,6 +258,10 @@ void ADroneModelSwitcher::ApplyModel(int32 Index)
         return;
     }
     ApplyAppearanceFromBlueprint(Pawn, Blueprint);
+    if (MenuWidget)
+    {
+        MenuWidget->HighlightSelected(Index);
+    }
 
     const FString Name = DisplayNames.IsValidIndex(Index) ? DisplayNames[Index]
         : DiscoveredBlueprints[Index].ToSoftObjectPath().GetAssetName();

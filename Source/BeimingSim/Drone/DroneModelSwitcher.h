@@ -7,6 +7,8 @@
 class AFlyingPawn;
 class UDroneSwitchWidget;
 class UBlueprint;
+class UTexture;
+class UTextureRenderTarget2D;
 
 /**
  * 机型热切换器：运行时按 Tab 呼出侧滑菜单，点击机型即可整体替换
@@ -40,13 +42,19 @@ public:
 
     /** AirSim 默认机型在菜单里的显示名 */
     UPROPERTY(EditAnywhere, Category = "DroneSwitch")
-    FString DefaultModelName = TEXT("AirSim 默认");
+    FString DefaultModelName = TEXT("AirSim");
 
 private:
     void CreateWidgetInternal();
     void BindTabKey();
     void ToggleMenu();
     void DiscoverModels();
+    /** 为每个机型生成 3D 预览缩略图并更新菜单（BeginPlay 后延迟调用） */
+    void GenerateThumbnails();
+    /** 缩略图阶段 2：等一拍后逐个拍照并销毁临时实例 */
+    void CapturePendingThumbnails();
+    /** 把临时生成的机型实例拍成一张预览图（深色背景，只渲染该 Actor） */
+    UTextureRenderTarget2D* CaptureThumbnail(AActor* Source) const;
     AFlyingPawn* FindDronePawn() const;
     void ApplyAppearanceFromBlueprint(AFlyingPawn* Pawn, UBlueprint* Blueprint);
 
@@ -64,5 +72,14 @@ private:
     UPROPERTY()
     TArray<FString> DisplayNames;
 
+    /** 与 DiscoveredBlueprints 一一对应的 3D 预览缩略图（可能为空） */
+    UPROPERTY(Transient)
+    TArray<TObjectPtr<UTexture>> ModelThumbnails;
+
+    /** 缩略图阶段 1 生成的临时机型实例，阶段 2 拍照后销毁 */
+    UPROPERTY(Transient)
+    TArray<TObjectPtr<AActor>> TempInstances;
+
     FTimerHandle TabBindRetryTimer;
+    FTimerHandle ThumbnailTimer;
 };
