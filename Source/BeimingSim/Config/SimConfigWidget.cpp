@@ -249,7 +249,7 @@ void USimConfigWidget::BuildPanel(ASimConfigManager* InManager)
     PauseCheck = PauseEnabled;
 
     MakeSliderRow(Content, TEXT("时钟速度"), ClockSpeed, 0.1f, 10.f, 1.f);
-    Content->AddChildToVerticalBox(MakeLabel(TEXT("* 时钟速度：保存并重建仿真后生效"), 11, NoteColor))
+    Content->AddChildToVerticalBox(MakeLabel(TEXT("* 时钟速度：点底部“保存并重建”后生效"), 11, NoteColor))
         ->SetPadding(FMargin(4, 0, 0, 2));
 
     // ---- settings 对象编辑 ----
@@ -265,9 +265,10 @@ void USimConfigWidget::BuildPanel(ASimConfigManager* InManager)
     UHorizontalBoxSlot* ApplySlot = BtnRow->AddChildToHorizontalBox(ApplyBtn);
     ApplySlot->SetPadding(FMargin(2, 0));
     ApplySlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
-    UButton* RebuildBtn = MakeButton(TEXT("保存并重建仿真"), true);
-    RebuildBtn->OnClicked.AddDynamic(this, &USimConfigWidget::OnApplyRebuild);
-    UHorizontalBoxSlot* RebuildSlot = BtnRow->AddChildToHorizontalBox(RebuildBtn);
+    // BEIMING: 合并原"保存并重建仿真"与"保存条目并重建"——时钟速度 + 当前条目一次写入并重建
+    UButton* SaveRebuildBtn = MakeButton(TEXT("保存并重建"), true);
+    SaveRebuildBtn->OnClicked.AddDynamic(this, &USimConfigWidget::OnSaveRebuild);
+    UHorizontalBoxSlot* RebuildSlot = BtnRow->AddChildToHorizontalBox(SaveRebuildBtn);
     RebuildSlot->SetPadding(FMargin(2, 0));
     Box->AddChildToVerticalBox(BtnRow)->SetPadding(FMargin(0, 6, 0, 0));
 
@@ -407,16 +408,60 @@ void USimConfigWidget::OnApplyLive()
     SetStatusText(TEXT("已应用：天气 / 风 / FOV / 暂停"));
 }
 
-void USimConfigWidget::OnApplyRebuild()
+// 合并保存：当前条目参数 + 时钟速度，一次落盘、一次重建（未选条目时仅写时钟速度）
+void USimConfigWidget::OnSaveRebuild()
 {
     if (!Manager.IsValid())
     {
         SetStatusText(TEXT("配置管理器未就绪"));
         return;
     }
-    const bool bOk = Manager->ApplyAndRebuild(Sliders[ClockSpeed]->GetValue());
-    SetStatusText(bOk ? TEXT("settings.json 已保存，SimMode 重建中…")
-                      : TEXT("重建失败，详见日志"));
+    // 注意：局部变量不能叫 ClockSpeed，会遮蔽 ESliderIndex::ClockSpeed 枚举常量
+    const float ClockSpeedValue = Sliders[ESliderIndex::ClockSpeed]->GetValue();
+
+    if (CurrentEntryRef.DisplayName.IsEmpty())
+    {
+        const bool bOk = Manager->ApplyAndRebuild(ClockSpeedValue);
+        SetStatusText(bOk ? TEXT("时钟速度已保存，SimMode 重建中…")
+                          : TEXT("保存失败，详见日志"));
+        return;
+    }
+
+    // 从行控件收集最新值（行类型与 SensorParams/SensorChecks/SensorTexts 一一对应）
+    TArray<FSimSensorParam> Edited;
+    int32 CheckIdx = 0;
+    int32 TextIdx = 0;
+    for (int32 i = 0; i < SensorParams.Num(); ++i)
+    {
+        FSimSensorParam Param = SensorParams[i];
+        const int32 RowType = SensorRowTypes.IsValidIndex(i) ? SensorRowTypes[i] : Param.Type;
+        switch (RowType)
+        {
+        case 0:
+            if (SensorChecks.IsValidIndex(CheckIdx))
+            {
+                Param.RawValue = SensorChecks[CheckIdx]->IsChecked() ? TEXT("true") : TEXT("false");
+            }
+            ++CheckIdx;
+            break;
+        case 1:
+        case 2:
+            if (SensorTexts.IsValidIndex(TextIdx))
+            {
+                Param.RawValue = SensorTexts[TextIdx]->GetText().ToString();
+            }
+            ++TextIdx;
+            break;
+        default:
+            break; // 只读项原样保留（Manager 侧会跳过）
+        }
+        Edited.Add(Param);
+    }
+
+    const bool bOk = Manager->ApplyEntryParams(CurrentEntryRef, Edited, ClockSpeedValue);
+    SetStatusText(bOk
+        ? FString::Printf(TEXT("条目 %s 与时钟速度已保存，SimMode 重建中…"), *CurrentEntryRef.DisplayName)
+        : TEXT("保存失败，详见日志"));
 }
 
 void USimConfigWidget::OnTimeMorning() { if (Manager.IsValid()) { Manager->ApplyTimeOfDay(0); SetStatusText(TEXT("时间已设为清晨 06:30")); } }
@@ -458,10 +503,7 @@ void USimConfigWidget::AddEntrySection(UVerticalBox* Content)
         EntryCombo->SetSelectedOption(EntryRefs[0].DisplayName);
     }
 
-    // 保存并重建
-    UButton* EntryApplyBtn = MakeButton(TEXT("保存条目并重建"), true);
-    EntryApplyBtn->OnClicked.AddDynamic(this, &USimConfigWidget::OnEntryApply);
-    Content->AddChildToVerticalBox(EntryApplyBtn)->SetPadding(FMargin(0, 6));
+    // 保存统一走面板底部"保存并重建"按钮（同时写入时钟速度）
 }
 
 void USimConfigWidget::RebuildSensorRows(bool bFetchFromManager)
@@ -605,51 +647,6 @@ void USimConfigWidget::OnEntryParamAdd()
     // 保留内存中的 SensorParams（含新增项），不重新从 json 拉取
     RebuildSensorRows(false);
     SetStatusText(TEXT("参数已加入列表，点\"保存条目并重建\"生效"));
-}
-
-void USimConfigWidget::OnEntryApply()
-{
-    if (!Manager.IsValid() || CurrentEntryRef.DisplayName.IsEmpty())
-    {
-        SetStatusText(TEXT("未选择条目"));
-        return;
-    }
-
-    // 从行控件收集最新值（行类型与 SensorParams/SensorChecks/SensorTexts 一一对应）
-    TArray<FSimSensorParam> Edited;
-    int32 CheckIdx = 0;
-    int32 TextIdx = 0;
-    for (int32 i = 0; i < SensorParams.Num(); ++i)
-    {
-        FSimSensorParam Param = SensorParams[i];
-        const int32 RowType = SensorRowTypes.IsValidIndex(i) ? SensorRowTypes[i] : Param.Type;
-        switch (RowType)
-        {
-        case 0:
-            if (SensorChecks.IsValidIndex(CheckIdx))
-            {
-                Param.RawValue = SensorChecks[CheckIdx]->IsChecked() ? TEXT("true") : TEXT("false");
-            }
-            ++CheckIdx;
-            break;
-        case 1:
-        case 2:
-            if (SensorTexts.IsValidIndex(TextIdx))
-            {
-                Param.RawValue = SensorTexts[TextIdx]->GetText().ToString();
-            }
-            ++TextIdx;
-            break;
-        default:
-            break; // 只读项原样保留（Manager 侧会跳过）
-        }
-        Edited.Add(Param);
-    }
-
-    const bool bOk = Manager->ApplyEntryParams(CurrentEntryRef, Edited);
-    SetStatusText(bOk
-        ? FString::Printf(TEXT("条目 %s 已保存，SimMode 重建中…"), *CurrentEntryRef.DisplayName)
-        : TEXT("保存失败，详见日志"));
 }
 
 // ---- 控件工厂 ----

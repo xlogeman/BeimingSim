@@ -21,11 +21,12 @@ class UVerticalBox;
 
 /**
  * 仿真配置面板（纯 C++ 构建 UMG，无需 WBP 资产，样式与 DroneSwitchWidget 一致）。
- * 按 O 从屏幕右侧滑出，分组编辑 AirSim 运行参数，生效方式分两条通道：
+ * 按 O 从屏幕右侧滑出，分组编辑 AirSim 运行参数，仅两个操作按钮：
  *
- * - 【即时】天气（雨/雪/尘/雾）、风（NED m/s）、相机 FOV、暂停、时间模拟：
+ * - 【应用（即时生效）】天气（雨/雪/尘/雾）、风（NED m/s）、相机 FOV、暂停：
  *   调用 AirSim 运行时 API（UWeatherLib / ASimModeBase setter），不重建 SimMode；
- * - 【重建】时钟速度：写回 settings.json（自动备份 .bak）→ 销毁并重建 SimMode 后生效。
+ * - 【保存并重建】当前 settings 条目参数 + 时钟速度一次写入 settings.json
+ *   （自动备份 .bak）→ 销毁并重建 SimMode 后生效。
  */
 UCLASS()
 class BEIMINGSIM_API USimConfigWidget : public UUserWidget
@@ -59,7 +60,8 @@ protected:
     UFUNCTION() void OnWeatherEnabledChanged(bool bChecked);
     UFUNCTION() void OnPauseChanged(bool bChecked);
     UFUNCTION() void OnApplyLive();
-    UFUNCTION() void OnApplyRebuild();
+    // 合并保存：当前条目参数 + 时钟速度一次写入并重建 SimMode
+    UFUNCTION() void OnSaveRebuild();
 
     UFUNCTION() void OnTimeMorning();
     UFUNCTION() void OnTimeNoon();
@@ -70,7 +72,6 @@ protected:
     // ---- settings 对象编辑区（通道 B：写回 settings.json → 重建 SimMode 生效）----
     UFUNCTION() void OnEntrySelected(FString SelectedItem, ESelectInfo::Type SelectionType);
     UFUNCTION() void OnEntryParamAdd();
-    UFUNCTION() void OnEntryApply();
 
 private:
     /** 滑条在 Sliders/ValueLabels 数组中的固定下标 */

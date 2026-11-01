@@ -25,6 +25,8 @@ struct FSimSettingsEntry
     int32 SensorType = 0;
     /** settings.json 中尚不存在该定义（当前用内置默认），应用时自动创建 */
     bool bSynthetic = false;
+    /** 载具相机条目（Vehicles.X.Cameras.Y）——面板为其注入 Enabled 开关（AirSimSettings 已支持解析） */
+    bool bCamera = false;
 };
 
 /** 条目内单个参数（键值对，值以字符串形式传递与展示） */
@@ -85,8 +87,12 @@ public:
     /** 读取某个条目对象的全部键值对（标量可编辑；对象/数组复合值只读展示） */
     void GetEntryParams(const FSimSettingsEntry& Entry, TArray<FSimSensorParam>& OutParams) const;
 
-    /** 写回某个条目的参数（Type==3 的只读项自动跳过），自动备份 .bak 并原地重建 SimMode */
-    bool ApplyEntryParams(const FSimSettingsEntry& Entry, const TArray<FSimSensorParam>& Params);
+    /**
+     * 写回某个条目的参数（Type==3 的只读项自动跳过），自动备份 .bak 并原地重建 SimMode。
+     * ClockSpeed >= 0 时同时把时钟速度写入根设置（单次落盘、单次重建）。
+     */
+    bool ApplyEntryParams(const FSimSettingsEntry& Entry, const TArray<FSimSensorParam>& Params,
+        float ClockSpeed = -1.f);
 
     /** 值字符串类型探测（面板"新增参数"用）：0 布尔 / 1 数值 / 2 字符串 */
     static int32 DetectValueType(const FString& Value);

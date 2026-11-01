@@ -367,18 +367,19 @@ void ASimConfigManager::GetEntryList(TArray<FSimSettingsEntry>& OutEntries) cons
     }
 
     auto MakeEntry = [](TArray<FString>&& InPath, const FString& DisplayName,
-        int32 SensorType = 0, bool bSynthetic = false)
+        int32 SensorType = 0, bool bSynthetic = false, bool bCamera = false)
     {
         FSimSettingsEntry Entry;
         Entry.Path = MoveTemp(InPath);
         Entry.DisplayName = DisplayName;
         Entry.SensorType = SensorType;
         Entry.bSynthetic = bSynthetic;
+        Entry.bCamera = bCamera;
         return Entry;
     };
 
     // 根设置：顶层标量（ClockType/ViewMode/ClockSpeed/InitialInstanceSegmentation 等）
-    OutEntries.Add(MakeEntry({}, TEXT("根设置（顶层标量）")));
+    OutEntries.Add(MakeEntry({}, TEXT("根设置")));
 
     // 顶层对象段（Wind/OriginGeopoint/TimeOfDay/Recording/Annotation/CameraDefaults/PawnPaths…）
     // 与数组段（ExternalCameras/SubWindows/WorldLights…，逐元素展开）
@@ -427,7 +428,7 @@ void ASimConfigManager::GetEntryList(TArray<FSimSettingsEntry>& OutEntries) cons
                 Type = static_cast<int32>(Num);
             }
             OutEntries.Add(MakeEntry({ TEXT("DefaultSensors"), Name },
-                FString::Printf(TEXT("%s（%s）"), *Name, *SensorTypeToName(Type)), Type));
+                FString::Printf(TEXT("全局 %s"), *Name), Type));
             bHasSensorEntries = true;
         }
     }
@@ -443,8 +444,7 @@ void ASimConfigManager::GetEntryList(TArray<FSimSettingsEntry>& OutEntries) cons
                 continue;
             }
             const FString VehicleName(Pair.Key.Len(), *Pair.Key);
-            OutEntries.Add(MakeEntry({ TEXT("Vehicles"), VehicleName },
-                FString::Printf(TEXT("载具 %s"), *VehicleName)));
+            OutEntries.Add(MakeEntry({ TEXT("Vehicles"), VehicleName }, VehicleName));
 
             if (const TSharedPtr<FJsonObject> Cameras = NavigateObject(Vehicle, { TEXT("Cameras") }))
             {
@@ -455,7 +455,8 @@ void ASimConfigManager::GetEntryList(TArray<FSimSettingsEntry>& OutEntries) cons
                         const FString CameraName(CameraPair.Key.Len(), *CameraPair.Key);
                         OutEntries.Add(MakeEntry(
                             { TEXT("Vehicles"), VehicleName, TEXT("Cameras"), CameraName },
-                            FString::Printf(TEXT("载具 %s 相机 %s"), *VehicleName, *CameraName)));
+                            FString::Printf(TEXT("%s › %s"), *VehicleName, *CameraName),
+                            0, false, true));
                     }
                 }
             }
@@ -474,8 +475,8 @@ void ASimConfigManager::GetEntryList(TArray<FSimSettingsEntry>& OutEntries) cons
                     }
                     OutEntries.Add(MakeEntry(
                         { TEXT("Vehicles"), VehicleName, TEXT("Sensors"), SensorName },
-                        FString::Printf(TEXT("[%s] %s（%s）"), *VehicleName, *SensorName,
-                            *SensorTypeToName(Type)), Type));
+                        FString::Printf(TEXT("%s › %s"), *VehicleName, *SensorName),
+                        Type));
                     bHasSensorEntries = true;
                 }
             }
@@ -494,8 +495,8 @@ void ASimConfigManager::GetEntryList(TArray<FSimSettingsEntry>& OutEntries) cons
         for (const FDefaultSensor& Default : Defaults)
         {
             OutEntries.Add(MakeEntry({ TEXT("DefaultSensors"), Default.Name },
-                FString::Printf(TEXT("%s（%s，内置默认）"), Default.Name,
-                    *SensorTypeToName(Default.Type)), Default.Type, true));
+                FString::Printf(TEXT("全局 %s（内置默认）"), Default.Name),
+                Default.Type, true));
         }
     }
 }
@@ -549,9 +550,29 @@ void ASimConfigManager::GetEntryParams(const FSimSettingsEntry& Entry, TArray<FS
         }
         OutParams.Add(Param);
     }
+
+    // 相机条目：json 未显式写 Enabled 时注入默认 true 行，保证面板始终有开关可调
+    // （AirSimSettings::createCameraSetting 已支持解析 Enabled，写回后重建 SimMode 生效）
+    if (Entry.bCamera)
+    {
+        bool bHasEnabled = false;
+        for (const FSimSensorParam& Param : OutParams)
+        {
+            if (Param.Key == TEXT("Enabled"))
+            {
+                bHasEnabled = true;
+                break;
+            }
+        }
+        if (!bHasEnabled)
+        {
+            OutParams.Insert({ TEXT("Enabled"), TEXT("true"), 0 }, 0);
+        }
+    }
 }
 
-bool ASimConfigManager::ApplyEntryParams(const FSimSettingsEntry& Entry, const TArray<FSimSensorParam>& Params)
+bool ASimConfigManager::ApplyEntryParams(const FSimSettingsEntry& Entry, const TArray<FSimSensorParam>& Params,
+    float ClockSpeed)
 {
     const TSharedPtr<FJsonObject> Root = LoadSettingsRoot();
     if (!Root)
@@ -609,6 +630,16 @@ bool ASimConfigManager::ApplyEntryParams(const FSimSettingsEntry& Entry, const T
             Target->SetStringField(Param.Key, Param.RawValue);
             break;
         }
+    }
+
+    // 时钟速度（可选，与条目一次落盘、一次重建）
+    if (ClockSpeed >= 0.f)
+    {
+        Root->SetNumberField(TEXT("ClockSpeed"), ClockSpeed);
+        // 固化 SimMode 类型，避免重载时弹出"选择载具"对话框
+        std::string SimModeName = msr::airlib::AirSimSettings::singleton().simmode_name;
+        Root->SetStringField(TEXT("SimMode"),
+            SimModeName.empty() ? TEXT("Multirotor") : UTF8_TO_TCHAR(SimModeName.c_str()));
     }
 
     // 序列化（美化缩进）→ 备份 → 落盘 → 重建 SimMode
