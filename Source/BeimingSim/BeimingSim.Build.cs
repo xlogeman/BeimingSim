@@ -15,6 +15,10 @@ public class BeimingSim : ModuleRules
 		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput", "AirSim", "UMG" });
 
 		PrivateDependencyModuleNames.AddRange(new string[] { "AIModule", "NavigationSystem", "GameplayTasks", "Slate", "SlateCore" });
+
+		// Source 按功能分子目录（Core/Camera/Drone/Walker），
+		// 代码中以 "Core/xxx.h" 这种模块根相对路径 include，需把模块根目录加入搜索路径。
+		PrivateIncludePaths.Add(ModuleDirectory);
 		
 		// Uncomment if you are using online features
 		// PrivateDependencyModuleNames.Add("OnlineSubsystem");
