@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "DroneSwitchWidget.h"
 #include "DroneModelSwitcher.generated.h"
 
 class AFlyingPawn;
@@ -43,6 +44,14 @@ public:
     /** AirSim 默认机型在菜单里的显示名 */
     UPROPERTY(EditAnywhere, Category = "DroneSwitch")
     FString DefaultModelName = TEXT("AirSim");
+
+    /**
+     * 各机型的介绍与参数（悬停菜单条目时弹出大图预览展示）。
+     * 键为菜单显示名（如 "AirSim"、"X450"，即蓝图资产名去掉 BP_ 前缀）。
+     * 未配置的机型显示兜底文案。
+     */
+    UPROPERTY(EditAnywhere, Category = "DroneSwitch")
+    TMap<FString, FDroneModelInfo> ModelInfos;
 
 private:
     void CreateWidgetInternal();

@@ -26,10 +26,16 @@ namespace
     // 与快照 RT 的 ClearColor 完全一致且不透明，避免方块内出现深浅不一的边界
     const FLinearColor ThumbBg(0.02f, 0.03f, 0.06f, 1.f);
     const FLinearColor Accent(0.15f, 0.62f, 0.95f, 1.f);
+    const FLinearColor TooltipBg(0.05f, 0.06f, 0.11f, 0.97f);
+    const FLinearColor ParamLabelColor(0.62f, 0.68f, 0.76f, 1.f);
     constexpr float PanelRadius = 12.f;
     constexpr float EntryRadius = 8.f;
+    constexpr float TooltipRadius = 10.f;
     constexpr int32 MaxEntries = 8;
     const FVector2D ThumbSize(80.f, 80.f);
+    const FVector2D TooltipImageSize(220.f, 220.f);
+    // 介绍文字强制换行宽度
+    constexpr float TooltipTextWidth = 240.f;
 }
 
 void UDroneSwitchWidget::BuildMenu(const TArray<FString>& InModelNames)
@@ -52,6 +58,7 @@ void UDroneSwitchWidget::BuildMenu(const TArray<FString>& InModelNames)
     PanelSlot->SetAutoSize(true);
     PanelSlot->SetPosition(FVector2D(CurrentX, 80.f));
     PanelSlot->SetZOrder(50);
+    PanelBorder = Panel;
 
     UVerticalBox* Box = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("Box"));
     Panel->SetContent(Box);
@@ -72,6 +79,9 @@ void UDroneSwitchWidget::BuildMenu(const TArray<FString>& InModelNames)
     EntryButtons.Reset();
     EntryImages.Reset();
     EntryLabels.Reset();
+    EntryTextures.Reset();
+    EntryInfos.Reset();
+    EntryInfos.SetNum(MaxEntries);
 
     for (int32 i = 0; i < ModelNames.Num() && i < MaxEntries; ++i)
     {
@@ -80,6 +90,9 @@ void UDroneSwitchWidget::BuildMenu(const TArray<FString>& InModelNames)
         BtnSlot->SetPadding(FMargin(0, 4));
         BtnSlot->SetHorizontalAlignment(HAlign_Fill);
     }
+
+    // 悬停预览弹窗（默认隐藏，放在画布顶层）
+    MakeTooltipPanel();
 
     // 底部提示
     Box->AddChildToVerticalBox(MakeLabel(TEXT("Tab 展开 / 收起"), 12, FLinearColor::Gray))
@@ -137,20 +150,31 @@ UButton* UDroneSwitchWidget::MakeEntryButton(int32 Index)
 
     switch (Index)
     {
-    case 0: Btn->OnClicked.AddDynamic(this, &UDroneSwitchWidget::OnPick0); break;
-    case 1: Btn->OnClicked.AddDynamic(this, &UDroneSwitchWidget::OnPick1); break;
-    case 2: Btn->OnClicked.AddDynamic(this, &UDroneSwitchWidget::OnPick2); break;
-    case 3: Btn->OnClicked.AddDynamic(this, &UDroneSwitchWidget::OnPick3); break;
-    case 4: Btn->OnClicked.AddDynamic(this, &UDroneSwitchWidget::OnPick4); break;
-    case 5: Btn->OnClicked.AddDynamic(this, &UDroneSwitchWidget::OnPick5); break;
-    case 6: Btn->OnClicked.AddDynamic(this, &UDroneSwitchWidget::OnPick6); break;
-    case 7: Btn->OnClicked.AddDynamic(this, &UDroneSwitchWidget::OnPick7); break;
+    case 0: Btn->OnClicked.AddDynamic(this, &UDroneSwitchWidget::OnPick0);
+            Btn->OnHovered.AddDynamic(this, &UDroneSwitchWidget::OnHover0); break;
+    case 1: Btn->OnClicked.AddDynamic(this, &UDroneSwitchWidget::OnPick1);
+            Btn->OnHovered.AddDynamic(this, &UDroneSwitchWidget::OnHover1); break;
+    case 2: Btn->OnClicked.AddDynamic(this, &UDroneSwitchWidget::OnPick2);
+            Btn->OnHovered.AddDynamic(this, &UDroneSwitchWidget::OnHover2); break;
+    case 3: Btn->OnClicked.AddDynamic(this, &UDroneSwitchWidget::OnPick3);
+            Btn->OnHovered.AddDynamic(this, &UDroneSwitchWidget::OnHover3); break;
+    case 4: Btn->OnClicked.AddDynamic(this, &UDroneSwitchWidget::OnPick4);
+            Btn->OnHovered.AddDynamic(this, &UDroneSwitchWidget::OnHover4); break;
+    case 5: Btn->OnClicked.AddDynamic(this, &UDroneSwitchWidget::OnPick5);
+            Btn->OnHovered.AddDynamic(this, &UDroneSwitchWidget::OnHover5); break;
+    case 6: Btn->OnClicked.AddDynamic(this, &UDroneSwitchWidget::OnPick6);
+            Btn->OnHovered.AddDynamic(this, &UDroneSwitchWidget::OnHover6); break;
+    case 7: Btn->OnClicked.AddDynamic(this, &UDroneSwitchWidget::OnPick7);
+            Btn->OnHovered.AddDynamic(this, &UDroneSwitchWidget::OnHover7); break;
     default: break;
     }
+    // 取消悬停统一隐藏弹窗，无需区分条目
+    Btn->OnUnhovered.AddDynamic(this, &UDroneSwitchWidget::OnEntryUnhover);
 
     EntryButtons.Add(Btn);
     EntryImages.Add(Img);
     EntryLabels.Add(Label);
+    EntryTextures.Add(nullptr);
     ApplyEntryStyle(Index);
     return Btn;
 }
@@ -194,6 +218,139 @@ void UDroneSwitchWidget::SetEntryThumbnail(int32 Index, UTexture* Thumbnail)
     ImgBrush.SetResourceObject(Thumbnail);
     ImgBrush.ImageSize = ThumbSize;
     EntryImages[Index]->SetBrush(ImgBrush);
+    if (EntryTextures.IsValidIndex(Index))
+    {
+        EntryTextures[Index] = Thumbnail;
+    }
+}
+
+void UDroneSwitchWidget::SetEntryInfo(int32 Index, const FDroneModelInfo& Info)
+{
+    if (EntryInfos.IsValidIndex(Index))
+    {
+        EntryInfos[Index] = Info;
+    }
+}
+
+void UDroneSwitchWidget::MakeTooltipPanel()
+{
+    TooltipBorder = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("TooltipBorder"));
+    TooltipBorder->SetBrush(FSlateRoundedBoxBrush(TooltipBg, TooltipRadius, Accent, 1.f));
+    TooltipBorder->SetPadding(FMargin(12.f));
+
+    UVerticalBox* TipBox = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("TipBox"));
+    TooltipBorder->SetContent(TipBox);
+
+    // 大图预览
+    UBorder* TipFrame = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("TipFrame"));
+    TipFrame->SetBrush(FSlateRoundedBoxBrush(ThumbBg, 6.f));
+    TipFrame->SetPadding(FMargin(4.f));
+    TipFrame->SetHorizontalAlignment(HAlign_Fill);
+    TooltipImage = WidgetTree->ConstructWidget<UImage>(UImage::StaticClass(), TEXT("TipImage"));
+    FSlateBrush ImgBrush;
+    ImgBrush.DrawAs = ESlateBrushDrawType::Image;
+    ImgBrush.ImageSize = TooltipImageSize;
+    TooltipImage->SetBrush(ImgBrush);
+    TipFrame->SetContent(TooltipImage);
+
+    USizeBox* ImageBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("TipImageBox"));
+    ImageBox->SetWidthOverride(TooltipImageSize.X + 8.f);
+    ImageBox->SetHeightOverride(TooltipImageSize.Y + 8.f);
+    ImageBox->SetContent(TipFrame);
+    TipBox->AddChildToVerticalBox(ImageBox);
+
+    // 机型名
+    TooltipNameLabel = MakeLabel(TEXT(""), 18, Accent);
+    TipBox->AddChildToVerticalBox(TooltipNameLabel)->SetPadding(FMargin(0, 10, 0, 4));
+
+    // 介绍文字（固定宽度强制换行）
+    TooltipDescLabel = MakeLabel(TEXT(""), 13, FLinearColor::White);
+    TooltipDescLabel->SetAutoWrapText(true);
+    USizeBox* DescBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("TipDescBox"));
+    DescBox->SetWidthOverride(TooltipTextWidth);
+    DescBox->SetContent(TooltipDescLabel);
+    TipBox->AddChildToVerticalBox(DescBox);
+
+    // 参数列表（每行"名称：值"，显示时按内容重建）
+    TooltipParamBox = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("TipParams"));
+    TipBox->AddChildToVerticalBox(TooltipParamBox)->SetPadding(FMargin(0, 8, 0, 0));
+
+    TooltipSlot = RootCanvas->AddChildToCanvas(TooltipBorder);
+    TooltipSlot->SetAutoSize(true);
+    TooltipSlot->SetZOrder(100);
+    // 弹窗右缘对齐 Position.X、垂直居中对齐 Position.Y（固定在菜单面板左侧）
+    TooltipSlot->SetAnchors(FAnchors(0.f, 0.f));
+    TooltipSlot->SetAlignment(FVector2D(1.f, 0.5f));
+    TooltipSlot->SetPosition(FVector2D::ZeroVector);
+    HideTooltip();
+}
+
+void UDroneSwitchWidget::ShowTooltip(int32 Index)
+{
+    if (!TooltipBorder || !ModelNames.IsValidIndex(Index) || !EntryInfos.IsValidIndex(Index))
+    {
+        return;
+    }
+
+    // 大图：复用条目缩略图
+    if (TooltipImage)
+    {
+        FSlateBrush ImgBrush;
+        ImgBrush.DrawAs = ESlateBrushDrawType::Image;
+        ImgBrush.ImageSize = TooltipImageSize;
+        if (EntryTextures.IsValidIndex(Index) && EntryTextures[Index])
+        {
+            ImgBrush.SetResourceObject(EntryTextures[Index]);
+        }
+        TooltipImage->SetBrush(ImgBrush);
+    }
+    if (TooltipNameLabel)
+    {
+        TooltipNameLabel->SetText(FText::FromString(ModelNames[Index]));
+    }
+    if (TooltipDescLabel)
+    {
+        const FText& Desc = EntryInfos[Index].Description;
+        TooltipDescLabel->SetText(Desc.IsEmpty() ? FText::FromString(TEXT("暂无介绍（可在 DroneModelSwitcher 的 ModelInfos 中配置）")) : Desc);
+    }
+    if (TooltipParamBox)
+    {
+        TooltipParamBox->ClearChildren();
+        for (const FDroneModelParam& Param : EntryInfos[Index].Params)
+        {
+            if (Param.Name.IsEmpty())
+            {
+                continue;
+            }
+            UTextBlock* Row = MakeLabel(Param.Name + TEXT("：") + Param.Value.ToString(), 12, ParamLabelColor);
+            TooltipParamBox->AddChildToVerticalBox(Row)->SetPadding(FMargin(0, 2));
+        }
+        // 没有可展示的参数时隐藏参数区，避免残留空白
+        TooltipParamBox->SetVisibility(TooltipParamBox->GetChildrenCount() > 0
+            ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed);
+    }
+
+    TooltipBorder->SetVisibility(ESlateVisibility::HitTestInvisible);
+
+    // 弹窗右缘紧贴菜单面板左缘（留 6px 缝隙），与悬停条目垂直居中对齐
+    const FGeometry& RootGeom = GetCachedGeometry();
+    if (TooltipSlot && PanelBorder && EntryButtons.IsValidIndex(Index))
+    {
+        const FGeometry& PanelGeom = PanelBorder->GetCachedGeometry();
+        const FGeometry& EntryGeom = EntryButtons[Index]->GetCachedGeometry();
+        const FVector2D PanelPos = PanelGeom.GetAbsolutePosition() - RootGeom.GetAbsolutePosition();
+        const FVector2D EntryPos = EntryGeom.GetAbsolutePosition() - RootGeom.GetAbsolutePosition();
+        const float EntryCenterY = EntryPos.Y + EntryGeom.GetLocalSize().Y * 0.5f;
+        TooltipSlot->SetPosition(FVector2D(PanelPos.X - 6.f, EntryCenterY));
+    }
+}
+
+void UDroneSwitchWidget::HideTooltip()
+{
+    if (TooltipBorder)
+    {
+        TooltipBorder->SetVisibility(ESlateVisibility::Collapsed);
+    }
 }
 
 void UDroneSwitchWidget::HighlightSelected(int32 Index)
@@ -221,6 +378,39 @@ void UDroneSwitchWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTi
         CurrentX = FMath::FInterpTo(CurrentX, TargetX, InDeltaTime, 10.f);
         PanelSlot->SetPosition(FVector2D(CurrentX, 80.f));
     }
+
+    // 弹窗为固定位置；仅在内容尺寸就绪后做一次视口边界收拢，防止过高时上下越界
+    if (TooltipBorder && TooltipSlot &&
+        TooltipBorder->GetVisibility() != ESlateVisibility::Collapsed)
+    {
+        const FVector2D ViewportSize = MyGeometry.GetLocalSize();
+        const FVector2D TipSize = TooltipBorder->GetDesiredSize();
+        if (TipSize.Y > 0.f && TipSize.X > 0.f)
+        {
+            const FVector2D Pos = TooltipSlot->GetPosition();
+            const float Half = TipSize.Y * 0.5f;
+            const float ClampedY = FMath::Clamp(Pos.Y, Half + 8.f,
+                FMath::Max(Half + 8.f, ViewportSize.Y - Half - 8.f));
+            if (!FMath::IsNearlyEqual(ClampedY, Pos.Y))
+            {
+                TooltipSlot->SetPosition(FVector2D(Pos.X, ClampedY));
+            }
+        }
+    }
+}
+
+void UDroneSwitchWidget::OnHover0() { ShowTooltip(0); }
+void UDroneSwitchWidget::OnHover1() { ShowTooltip(1); }
+void UDroneSwitchWidget::OnHover2() { ShowTooltip(2); }
+void UDroneSwitchWidget::OnHover3() { ShowTooltip(3); }
+void UDroneSwitchWidget::OnHover4() { ShowTooltip(4); }
+void UDroneSwitchWidget::OnHover5() { ShowTooltip(5); }
+void UDroneSwitchWidget::OnHover6() { ShowTooltip(6); }
+void UDroneSwitchWidget::OnHover7() { ShowTooltip(7); }
+
+void UDroneSwitchWidget::OnEntryUnhover()
+{
+    HideTooltip();
 }
 
 UTextBlock* UDroneSwitchWidget::MakeLabel(const FString& Text, int32 FontSize, FLinearColor Color) const

@@ -207,6 +207,14 @@ void ADroneModelSwitcher::CreateWidgetInternal()
 
     MenuWidget->BuildMenu(DisplayNames);
     MenuWidget->OnModelPicked.AddDynamic(this, &ADroneModelSwitcher::ApplyModel);
+    // 填充各机型的介绍与参数（悬停弹窗内容），未配置的机型由控件内部兜底
+    for (int32 i = 0; i < DisplayNames.Num(); ++i)
+    {
+        if (const FDroneModelInfo* Info = ModelInfos.Find(DisplayNames[i]))
+        {
+            MenuWidget->SetEntryInfo(i, *Info);
+        }
+    }
     MenuWidget->AddToViewport(100);
 }
 
