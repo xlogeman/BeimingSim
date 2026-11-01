@@ -148,8 +148,21 @@ void UWeatherLib::setWeatherEnabled(UWorld* World, bool bEnabled)
     }
     setWeatherParamScalar(World, EWeatherParamScalar::WEATHER_PARAM_SCALAR_WEATHERENABLED, Value);
 }
-// BEIMING patch: showWeatherMenu/hideWeatherMenu/isMenuVisible/toggleWeatherMenu 已删除，
-// 天气/风/时间调节由项目内 O 键仿真配置面板（BeimingSim 模块 SimConfigWidget）提供
+// BEIMING patch: 天气菜单已由项目内 O 键仿真配置面板（BeimingSim 模块 SimConfigWidget）取代。
+// 以下函数保留空实现，仅为兼容 BP_LevelLoadButton 等仍引用它们的蓝图资产，保证 Cook 通过。
+void UWeatherLib::showWeatherMenu(UWorld* World)
+{
+}
+void UWeatherLib::hideWeatherMenu(UWorld* World)
+{
+}
+bool UWeatherLib::isMenuVisible(UWorld* World)
+{
+    return false;
+}
+void UWeatherLib::toggleWeatherMenu(UWorld* World)
+{
+}
 UWorld* UWeatherLib::widgetGetWorld(UUserWidget* Widget)
 {
     if (Widget) {

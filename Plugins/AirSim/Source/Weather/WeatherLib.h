@@ -150,6 +150,21 @@ public:
     UFUNCTION(BlueprintCallable, Category = Weather)
     static void setWeatherFog(AExponentialHeightFog* fog);
 
+    // BEIMING patch: 天气菜单已删除，但插件内容资产 BP_LevelLoadButton 中仍有对
+    // 这些函数的蓝图调用节点，缺失会导致 Cook 阶段蓝图编译失败（Unknown Cook Failure）。
+    // 此处保留同签名的空实现以兼容旧资产，功能由项目内 O 键配置面板提供。
+    UFUNCTION(BlueprintCallable, Category = Weather)
+    static void showWeatherMenu(UWorld* World);
+
+    UFUNCTION(BlueprintCallable, Category = Weather)
+    static void hideWeatherMenu(UWorld* World);
+
+    UFUNCTION(BlueprintCallable, Category = Weather)
+    static bool isMenuVisible(UWorld* World);
+
+    UFUNCTION(BlueprintCallable, Category = Weather)
+    static void toggleWeatherMenu(UWorld* World);
+
 private:
     static AExponentialHeightFog* weather_fog_;
 };
