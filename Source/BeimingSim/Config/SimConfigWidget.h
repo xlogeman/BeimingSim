@@ -2,14 +2,18 @@
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
+#include "SimConfigManager.h"
+#include "Types/SlateEnums.h"
 #include "SimConfigWidget.generated.h"
 
 class ASimConfigManager;
 class UBorder;
 class UButton;
 class UCheckBox;
+class UComboBoxString;
 class UCanvasPanel;
 class UCanvasPanelSlot;
+class UEditableTextBox;
 class UScrollBox;
 class USlider;
 class UTextBlock;
@@ -63,6 +67,11 @@ protected:
     UFUNCTION() void OnTimeNight();
     UFUNCTION() void OnTimeDisable();
 
+    // ---- settings 对象编辑区（通道 B：写回 settings.json → 重建 SimMode 生效）----
+    UFUNCTION() void OnEntrySelected(FString SelectedItem, ESelectInfo::Type SelectionType);
+    UFUNCTION() void OnEntryParamAdd();
+    UFUNCTION() void OnEntryApply();
+
 private:
     /** 滑条在 Sliders/ValueLabels 数组中的固定下标 */
     enum ESliderIndex
@@ -79,12 +88,16 @@ private:
         SliderCount
     };
 
-    UTextBlock* MakeLabel(const FString& Text, int32 FontSize, FLinearColor Color) const;
+    UTextBlock* MakeLabel(const FString& Text, int32 FontSize, FLinearColor Color, bool bBold = false) const;
     /** 创建一行"名称 + 滑条 + 数值"，返回创建的滑条（回调绑定由 BuildPanel 统一完成） */
     USlider* MakeSliderRow(UVerticalBox* Parent, const FString& Name, ESliderIndex Index,
         float Min, float Max, float Value);
-    UButton* MakeButton(const FString& Text);
+    UButton* MakeButton(const FString& Text, bool bPrimary = false);
     void AddSectionHeader(UVerticalBox* Parent, const FString& Title);
+    /** 构建"settings 对象"区：下拉框 + 参数键值行 + 新增参数行 + 保存重建按钮 */
+    void AddEntrySection(UVerticalBox* Content);
+    /** 按当前选中条目重建参数键值行；bFetchFromManager=false 时保留内存中的 SensorParams（新增参数后重建行用） */
+    void RebuildSensorRows(bool bFetchFromManager = true);
     void OnSliderChanged(ESliderIndex Index, float Value);
     void UpdateValueLabel(ESliderIndex Index);
     void SetStatusText(const FString& Text);
@@ -109,6 +122,36 @@ private:
 
     UPROPERTY()
     TObjectPtr<UTextBlock> StatusLabel = nullptr;
+
+    // ---- settings 对象编辑区 ----
+    UPROPERTY()
+    TObjectPtr<UComboBoxString> EntryCombo = nullptr;
+
+    UPROPERTY()
+    TObjectPtr<UVerticalBox> SensorRowsBox = nullptr;
+
+    UPROPERTY()
+    TArray<TObjectPtr<UCheckBox>> SensorChecks;
+
+    UPROPERTY()
+    TArray<TObjectPtr<UEditableTextBox>> SensorTexts;
+
+    UPROPERTY()
+    TObjectPtr<UEditableTextBox> NewParamKeyBox = nullptr;
+
+    UPROPERTY()
+    TObjectPtr<UEditableTextBox> NewParamValueBox = nullptr;
+
+    UPROPERTY()
+    TArray<TObjectPtr<UWidget>> SensorRowWidgets;
+
+    /** 当前条目的参数列表（与键值行一一对应） */
+    TArray<FSimSensorParam> SensorParams;
+    /** 与键值行一一对应的行类型（0 布尔 / 1 数值 / 2 字符串 / 3 只读） */
+    TArray<int32> SensorRowTypes;
+    /** 候选条目列表（与下拉框选项一一对应） */
+    TArray<FSimSettingsEntry> EntryRefs;
+    FSimSettingsEntry CurrentEntryRef;
 
     TWeakObjectPtr<ASimConfigManager> Manager;
 

@@ -12,7 +12,7 @@ public class BeimingSim : ModuleRules
 		// 打包的游戏目标默认禁用 C++ 异常，需显式开启（与 AirSim 模块一致）。
 		bEnableExceptions = true;
 
-		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput", "AirSim", "UMG" });
+		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput", "AirSim", "UMG", "Json" });
 
 		PrivateDependencyModuleNames.AddRange(new string[] { "AIModule", "NavigationSystem", "GameplayTasks", "Slate", "SlateCore" });
 
