@@ -19,6 +19,19 @@ PawnSimApi::PawnSimApi(const Params& params)
 {
 }
 
+// BEIMING patch: 重建 SimMode 时旧 PawnSimApi 会先于旧 Pawn 销毁（EndPlay 只 clear
+// vehicle_sim_apis_，不销毁 Pawn Actor），若不断开注册在 PawnEvents 上的槽位，
+// 僵尸 Pawn 下一次 Tick 仍会 emit 到已释放对象，导致 Signal.hpp emit 处 vcall 崩溃
+PawnSimApi::~PawnSimApi()
+{
+    if (params_.pawn_events) {
+        if (pawn_tick_signal_id_ >= 0)
+            params_.pawn_events->getPawnTickSignal().disconnect(pawn_tick_signal_id_);
+        if (collision_signal_id_ >= 0)
+            params_.pawn_events->getCollisionSignal().disconnect(collision_signal_id_);
+    }
+}
+
 void PawnSimApi::initialize()
 {
     Kinematics::State initial_kinematic_state = Kinematics::State::zero();
@@ -55,8 +68,8 @@ void PawnSimApi::initialize()
     setupLightsFromSettings(params_.lights);
 
     //add listener for pawn's collision event
-    params_.pawn_events->getCollisionSignal().connect_member(this, &PawnSimApi::onCollision);
-    params_.pawn_events->getPawnTickSignal().connect_member(this, &PawnSimApi::pawnTick);
+    collision_signal_id_ = params_.pawn_events->getCollisionSignal().connect_member(this, &PawnSimApi::onCollision);
+    pawn_tick_signal_id_ = params_.pawn_events->getPawnTickSignal().connect_member(this, &PawnSimApi::pawnTick);
 }
 
 void PawnSimApi::setStartPosition(const FVector& position, const FRotator& rotator)
@@ -103,8 +116,14 @@ void PawnSimApi::setupCamerasFromSettings(const common_utils::UniqueValueMap<std
 {
     //add cameras that already exists in pawn
     cameras_.clear();
-    for (const auto& p : cameras.getMap())
+    // BEIMING patch: hide pawn cameras that are disabled in settings ("Enabled": false)
+    const auto& vehicle_cameras = getVehicleSetting()->cameras;
+    for (const auto& p : cameras.getMap()) {
+        const auto it = vehicle_cameras.find(p.first);
+        if (it != vehicle_cameras.end() && !it->second.enabled)
+            continue;
         cameras_.insert_or_assign(p.first, p.second);
+    }
 
     //create or replace cameras specified in settings
     createCamerasFromSettings();
@@ -140,6 +159,10 @@ void PawnSimApi::createCamerasFromSettings()
     //for each camera in settings
     for (const auto& camera_setting_pair : getVehicleSetting()->cameras) {
         const auto& setting = camera_setting_pair.second;
+
+        // BEIMING patch: skip cameras disabled in settings ("Enabled": false)
+        if (!setting.enabled)
+            continue;
 
         //get pose
         FVector position = transform.fromLocalNed(setting.position) - transform.fromLocalNed(Vector3r::Zero());

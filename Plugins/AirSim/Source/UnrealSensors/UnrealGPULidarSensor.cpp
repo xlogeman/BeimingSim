@@ -21,11 +21,22 @@ UnrealGPULidarSensor::UnrealGPULidarSensor(const AirSimSettings::GPULidarSetting
 	FActorSpawnParameters lidar_spawn_params;
 
 	lidar_spawn_params.Name = FName(*(actor->GetName() + "_gpulidar_" + FString(setting.sensor_name.c_str())));
+	// BEIMING patch: 同名 Actor 已存在时自动加后缀，而不是 fatal
+	lidar_spawn_params.NameMode = FActorSpawnParameters::ESpawnActorNameMode::Requested;
 	lidar_camera_ = actor->GetWorld()->SpawnActor<ALidarCamera>(lidar_spawn_params);
 	if (!getParams().external) {
 		lidar_camera_->AttachToActor(actor, FAttachmentTransformRules::KeepRelativeTransform);
 	}
 	lidar_camera_->InitializeSettingsFromAirSim(getParams());
+}
+
+// BEIMING patch: 传感器对象随旧 SimMode 销毁时，同步销毁其 LidarCamera Actor
+// （重建 SimMode 后旧 Actor 残留会导致同名新 Actor 生成失败而崩溃）
+UnrealGPULidarSensor::~UnrealGPULidarSensor()
+{
+	if (lidar_camera_ && !lidar_camera_->IsActorBeingDestroyed()) {
+		lidar_camera_->Destroy();
+	}
 }
 
 // Pause Unreal simulation

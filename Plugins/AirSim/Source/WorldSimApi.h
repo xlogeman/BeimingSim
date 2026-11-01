@@ -150,6 +150,12 @@ private:
     AActor* createNewBPActor(const FActorSpawnParameters& spawn_params, const FTransform& actor_transform, const Vector3r& scale, UBlueprint* blueprint);
     void spawnPlayer();
 
+    // BEIMING patch: 带校验的相机查找。相机名不存在或被 settings 中 Enabled=false
+    // 禁用时 ASimModeBase::getCamera 返回 nullptr，直接解引用会崩溃；
+    // 这里统一抛出 invalid_argument，由 RPC 层转成错误返回给客户端
+    APIPCamera* getCameraChecked(const CameraDetails& camera_details);
+    const APIPCamera* getCameraChecked(const CameraDetails& camera_details) const;
+
 private:
     ASimModeBase* simmode_;
     std::vector<bool> voxel_grid_;

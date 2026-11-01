@@ -17,6 +17,9 @@ public:
 public:
 	UnrealGPULidarSensor(const AirSimSettings::GPULidarSetting& setting,
 		AActor* actor, const NedTransform* ned_transform);
+	// BEIMING patch: 析构时销毁生成的 LidarCamera Actor，
+	// 否则重建 SimMode 后同名 Actor 无法再生成（fatal: Cannot generate unique name）
+	virtual ~UnrealGPULidarSensor();
 
 protected:
 	virtual bool getPointCloud(float delta_time, msr::airlib::vector<msr::airlib::real_T>& point_cloud, msr::airlib::vector<msr::airlib::real_T>& point_cloud_final) override;

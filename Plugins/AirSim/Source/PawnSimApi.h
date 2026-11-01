@@ -121,6 +121,8 @@ protected: //additional interface for derived class
 
 public: //Unreal specific methods
     PawnSimApi(const Params& params);
+    // BEIMING patch: 析构时断开 PawnEvents 上的信号槽位（重建 SimMode 后旧 Pawn 仍存活）
+    virtual ~PawnSimApi();
 
     //returns one of the cameras attached to the pawn
     const APIPCamera* getCamera(const std::string& camera_name) const;
@@ -179,6 +181,10 @@ private: //vars
     common_utils::UniqueValueMap<std::string, APIPCamera*> cameras_;
     common_utils::UniqueValueMap<std::string, ALight*> lights_;
     msr::airlib::GeoPoint home_geo_point_;
+
+    // BEIMING patch: 信号槽位 id（析构时断开，防止重建 SimMode 后悬空调用）
+    int pawn_tick_signal_id_ = -1;
+    int collision_signal_id_ = -1;
 
     std::string vehicle_name_;
     NedTransform ned_transform_;

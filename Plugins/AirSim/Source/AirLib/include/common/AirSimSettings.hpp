@@ -304,6 +304,9 @@ namespace airlib
             bool external_ned = true;                         // define if the external sensor coordinates should be reported back by the API in local NED or Unreal coordinates
             bool draw_sensor = false;
 
+            // BEIMING patch: allow disabling a camera via settings ("Enabled": false)
+            bool enabled = true;
+
             GimbalSetting gimbal;
             CaptureSettingsMap capture_settings;
             NoiseSettingsMap noise_settings;
@@ -1482,6 +1485,9 @@ namespace airlib
             setting.external = settings_json.getBool("External", setting.external);
             setting.external_ned = settings_json.getBool("ExternalLocal", setting.external_ned);
             setting.draw_sensor = settings_json.getBool("DrawSensor", setting.draw_sensor);
+
+            // BEIMING patch: parse "Enabled" (defaults to true, also inherited from CameraDefaults)
+            setting.enabled = settings_json.getBool("Enabled", setting.enabled);
 
             loadCaptureSettings(settings_json, setting.capture_settings);
             loadNoiseSettings(settings_json, setting.noise_settings);

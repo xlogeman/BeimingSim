@@ -1960,6 +1960,8 @@ void ASimModeBase::setupVehiclesAndCamera()
                 //spawn passive echo beacon actor
                 FActorSpawnParameters actor_spawn_params;
                 actor_spawn_params.Name = FName(passive_echo_beacon_setting.name.c_str());
+                // BEIMING patch: 同名 Actor 已存在（重建 SimMode 后旧信标残留）时自动加后缀，而不是 fatal
+                actor_spawn_params.NameMode = FActorSpawnParameters::ESpawnActorNameMode::Requested;
                 actor_spawn_params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
                 actor_spawn_params.bDeferConstruction = true;
                 APassiveEchoBeacon* spawned_passive_echo_beacon = static_cast<APassiveEchoBeacon*>(GetWorld()->SpawnActor<APassiveEchoBeacon>(spawn_position, spawn_rotation, actor_spawn_params));
