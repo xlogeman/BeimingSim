@@ -171,9 +171,12 @@ void UDroneSwitchWidget::ApplyEntryStyle(int32 Index)
     Style.Normal = FSlateRoundedBoxBrush(EntryBg, EntryRadius, Outline, OutlineWidth);
     Style.Hovered = FSlateRoundedBoxBrush(EntryHoverBg, EntryRadius, Outline, OutlineWidth);
     Style.Pressed = FSlateRoundedBoxBrush(EntryPressBg, EntryRadius, bSelected ? Accent : Outline, OutlineWidth);
+    // 选中机型整体禁用（不可再次点击），Disabled 态保持选中高亮观感
+    Style.Disabled = FSlateRoundedBoxBrush(EntryBg, EntryRadius, Accent, OutlineWidth);
     Style.SetNormalPadding(FMargin(12.f, 8.f));
     Style.SetPressedPadding(FMargin(12.f, 8.f));
     EntryButtons[Index]->SetStyle(Style);
+    EntryButtons[Index]->SetIsEnabled(!bSelected);
 
     if (EntryLabels.IsValidIndex(Index))
     {
@@ -229,11 +232,22 @@ UTextBlock* UDroneSwitchWidget::MakeLabel(const FString& Text, int32 FontSize, F
     return Label;
 }
 
-void UDroneSwitchWidget::OnPick0() { if (ModelNames.Num() > 0) { OnModelPicked.Broadcast(0); ToggleMenu(); } }
-void UDroneSwitchWidget::OnPick1() { if (ModelNames.Num() > 1) { OnModelPicked.Broadcast(1); ToggleMenu(); } }
-void UDroneSwitchWidget::OnPick2() { if (ModelNames.Num() > 2) { OnModelPicked.Broadcast(2); ToggleMenu(); } }
-void UDroneSwitchWidget::OnPick3() { if (ModelNames.Num() > 3) { OnModelPicked.Broadcast(3); ToggleMenu(); } }
-void UDroneSwitchWidget::OnPick4() { if (ModelNames.Num() > 4) { OnModelPicked.Broadcast(4); ToggleMenu(); } }
-void UDroneSwitchWidget::OnPick5() { if (ModelNames.Num() > 5) { OnModelPicked.Broadcast(5); ToggleMenu(); } }
-void UDroneSwitchWidget::OnPick6() { if (ModelNames.Num() > 6) { OnModelPicked.Broadcast(6); ToggleMenu(); } }
-void UDroneSwitchWidget::OnPick7() { if (ModelNames.Num() > 7) { OnModelPicked.Broadcast(7); ToggleMenu(); } }
+void UDroneSwitchWidget::RequestPick(int32 Index)
+{
+    // 无效下标或重复选择当前机型：直接忽略，不广播、不收起面板
+    if (!ModelNames.IsValidIndex(Index) || Index == SelectedIndex)
+    {
+        return;
+    }
+    OnModelPicked.Broadcast(Index);
+    ToggleMenu();
+}
+
+void UDroneSwitchWidget::OnPick0() { RequestPick(0); }
+void UDroneSwitchWidget::OnPick1() { RequestPick(1); }
+void UDroneSwitchWidget::OnPick2() { RequestPick(2); }
+void UDroneSwitchWidget::OnPick3() { RequestPick(3); }
+void UDroneSwitchWidget::OnPick4() { RequestPick(4); }
+void UDroneSwitchWidget::OnPick5() { RequestPick(5); }
+void UDroneSwitchWidget::OnPick6() { RequestPick(6); }
+void UDroneSwitchWidget::OnPick7() { RequestPick(7); }

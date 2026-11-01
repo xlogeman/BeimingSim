@@ -29,6 +29,7 @@ void ADroneModelSwitcher::BeginPlay()
     DiscoverModels();
     CreateWidgetInternal();
     BindTabKey();
+    SyncInitialSelection();
 
     if (GEngine)
     {
@@ -224,10 +225,49 @@ void ADroneModelSwitcher::BindTabKey()
 
 void ADroneModelSwitcher::ToggleMenu()
 {
+    // 兜底：首次打开菜单前若同步重试还没等到 Pawn，此时 Pawn 必然已就绪，做最后一次同步
+    if (!bInitialSelectionSynced)
+    {
+        GetWorldTimerManager().ClearTimer(SyncSelectionTimer);
+        if (MenuWidget)
+        {
+            MenuWidget->HighlightSelected(FindDronePawn() ? GetCurrentModelIndex() : -1);
+        }
+        bInitialSelectionSynced = true;
+    }
     if (MenuWidget)
     {
         MenuWidget->ToggleMenu();
     }
+}
+
+void ADroneModelSwitcher::SyncInitialSelection()
+{
+    if (FindDronePawn())
+    {
+        // 根据场景中实际飞行的机型同步初始选中态（选中项不可点击）
+        if (MenuWidget)
+        {
+            MenuWidget->HighlightSelected(GetCurrentModelIndex());
+        }
+        bInitialSelectionSynced = true;
+        return;
+    }
+
+    // 无人机 Pawn 由 AirSim SimMode 在 BeginPlay 流程中延迟生成，稍后重试
+    if (++SyncSelectionAttempts >= MaxSyncAttempts)
+    {
+        if (MenuWidget)
+        {
+            MenuWidget->HighlightSelected(-1);
+        }
+        bInitialSelectionSynced = true;
+        UE_LOG(LogTemp, Warning, TEXT("DroneSwitcher: 等待 %d 次仍未找到 AFlyingPawn，初始选中态未同步"),
+            MaxSyncAttempts);
+        return;
+    }
+    GetWorldTimerManager().SetTimer(SyncSelectionTimer, this,
+        &ADroneModelSwitcher::SyncInitialSelection, 0.5f, false);
 }
 
 AFlyingPawn* ADroneModelSwitcher::FindDronePawn() const
@@ -237,6 +277,26 @@ AFlyingPawn* ADroneModelSwitcher::FindDronePawn() const
         return *It;
     }
     return nullptr;
+}
+
+int32 ADroneModelSwitcher::GetCurrentModelIndex() const
+{
+    const AFlyingPawn* Pawn = FindDronePawn();
+    if (!Pawn)
+    {
+        return -1;
+    }
+    // 与已发现的机型蓝图逐一比对类。启动时蓝图资产都还是未加载的软引用，
+    // 必须同步加载后才能拿到 GeneratedClass（缩略图阶段本就会全部加载，无额外开销）
+    for (int32 i = 0; i < DiscoveredBlueprints.Num(); ++i)
+    {
+        UBlueprint* Blueprint = DiscoveredBlueprints[i].LoadSynchronous();
+        if (Blueprint && Blueprint->GeneratedClass && Pawn->GetClass()->IsChildOf(Blueprint->GeneratedClass))
+        {
+            return i;
+        }
+    }
+    return -1;
 }
 
 void ADroneModelSwitcher::ApplyModel(int32 Index)

@@ -15,7 +15,7 @@ class UTextBlock;
  * 机型选择侧滑面板。
  * 纯 C++ 构建 UMG（不需要在编辑器里创建 WBP 资产）：
  * 左侧圆角半透明面板，Tab 展开/收起；每个条目含 3D 预览缩略图与机型名，
- * 支持悬停高亮与当前选中机型高亮。
+ * 支持悬停高亮与当前选中机型高亮；当前选中的机型不可再次点击。
  */
 UCLASS()
 class BEIMINGSIM_API UDroneSwitchWidget : public UUserWidget
@@ -57,6 +57,8 @@ private:
     UTextBlock* MakeLabel(const FString& Text, int32 FontSize, FLinearColor Color) const;
     UButton* MakeEntryButton(int32 Index);
     void ApplyEntryStyle(int32 Index);
+    /** 统一的选中入口：当前选中的机型直接忽略，不广播也不收起面板 */
+    void RequestPick(int32 Index);
 
     UPROPERTY()
     UCanvasPanel* RootCanvas = nullptr;

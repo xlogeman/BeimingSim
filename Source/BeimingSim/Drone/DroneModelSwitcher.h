@@ -48,6 +48,8 @@ private:
     void CreateWidgetInternal();
     void BindTabKey();
     void ToggleMenu();
+    /** 同步初始选中态；无人机 Pawn 由 AirSim SimMode 延迟生成，未就绪时定时重试 */
+    void SyncInitialSelection();
     void DiscoverModels();
     /** 为每个机型生成 3D 预览缩略图并更新菜单（BeginPlay 后延迟调用） */
     void GenerateThumbnails();
@@ -56,6 +58,8 @@ private:
     /** 把临时生成的机型实例拍成一张预览图（深色背景，只渲染该 Actor） */
     UTextureRenderTarget2D* CaptureThumbnail(AActor* Source) const;
     AFlyingPawn* FindDronePawn() const;
+    /** 获取场景中当前无人机对应的菜单下标；无法识别时返回 -1（无选中项） */
+    int32 GetCurrentModelIndex() const;
     void ApplyAppearanceFromBlueprint(AFlyingPawn* Pawn, UBlueprint* Blueprint);
 
     UFUNCTION()
@@ -82,4 +86,10 @@ private:
 
     FTimerHandle TabBindRetryTimer;
     FTimerHandle ThumbnailTimer;
+    FTimerHandle SyncSelectionTimer;
+    /** 初始选中态是否已同步完成（完成后不再重试/兜底） */
+    bool bInitialSelectionSynced = false;
+    int32 SyncSelectionAttempts = 0;
+    /** 同步重试上限（0.5s 一次，共 10s） */
+    static constexpr int32 MaxSyncAttempts = 20;
 };
