@@ -2,6 +2,7 @@
 #include "UObject/ConstructorHelpers.h"
 #include "Kismet/KismetSystemLibrary.h"
 #include "Misc/FileHelper.h"
+#include "TimerManager.h"
 
 #include "Vehicles/Multirotor/SimModeWorldMultiRotor.h"
 #include "Vehicles/Car/SimModeCar.h"
@@ -249,6 +250,63 @@ void ASimHUD::initializeSettings()
     }
     for (const auto& error : AirSimSettings::singleton().error_messages) {
         UAirBlueprintLib::ShowMessage(EAppMsgType::Ok, error, "settings.json");
+    }
+}
+
+FString ASimHUD::getSettingsFilePath() const
+{
+    // 命令行 -settings= 仅支持路径形式；若为内联 JSON（路径不存在）则回退到后续查找
+    const TCHAR* commandLineArgs = FCommandLine::Get();
+    FString settingsPathFString;
+    if (FParse::Value(commandLineArgs, TEXT("-settings="), settingsPathFString, false) &&
+        FPaths::FileExists(settingsPathFString)) {
+        return FPaths::ConvertRelativePathToFull(settingsPathFString);
+    }
+
+    FString path = FString(msr::airlib::Settings::getExecutableFullPath("settings.json").c_str());
+    if (FPaths::FileExists(path))
+        return FPaths::ConvertRelativePathToFull(path);
+
+    path = getLaunchPath("settings.json");
+    if (FPaths::FileExists(path))
+        return path;
+
+    // 未找到任何 settings.json 时返回文档目录路径（与 createDefaultSettingsFile 的落盘位置一致）
+    return FPaths::ConvertRelativePathToFull(
+        FString(msr::airlib::Settings::getUserDirectoryFullPath("settings.json").c_str()));
+}
+
+void ASimHUD::RecreateSimMode()
+{
+    if (simmode_) {
+        simmode_->stopApiServer();
+        simmode_->Destroy();
+        simmode_ = nullptr;
+    }
+
+    // 延迟一帧重建：AActor::Destroy 触发的 EndPlay 清理（车辆/传感器/物理世界）完成后，
+    // 再按 BeginPlay 相同顺序重新读入 settings.json 并重建 SimMode
+    GetWorldTimerManager().SetTimerForNextTick(
+        FTimerDelegate::CreateWeakLambda(this, [this]() { recreateSimModeInternal(); }));
+}
+
+void ASimHUD::recreateSimModeInternal()
+{
+    try {
+        initializeSettings();
+        setUnrealEngineSettings();
+        createSimMode();
+        if (simmode_) {
+            simmode_->startApiServer();
+            initializeSubWindows();
+            if (widget_)
+                updateWidgetSubwindowVisibility();
+        }
+        UAirBlueprintLib::LogMessageString("SimMode re-created with new settings", "", LogDebugLevel::Informational);
+    }
+    catch (std::exception& ex) {
+        UAirBlueprintLib::LogMessageString("Error re-creating SimMode: ", ex.what(), LogDebugLevel::Failure);
+        UAirBlueprintLib::ShowMessage(EAppMsgType::Ok, std::string("Error re-creating SimMode: ") + ex.what(), "Error");
     }
 }
 

@@ -164,7 +164,6 @@ void ASimModeBase::BeginPlay()
     UWorld* World = GetWorld();
     if (World) {
         UWeatherLib::initWeather(World, spawned_actors_);
-        //UWeatherLib::showWeatherMenu(World);
     }
     UAirBlueprintLib::GenerateActorMap(this, scene_object_map);
 

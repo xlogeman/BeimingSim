@@ -1,9 +1,7 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 #include "WeatherLib.h"
 #include "Materials/MaterialParameterCollection.h"
-#include "Runtime/Engine/Classes/Kismet/GameplayStatics.h"
 #include "Blueprint/UserWidget.h"
-#include "Blueprint/WidgetBlueprintLibrary.h"
 
 AExponentialHeightFog* UWeatherLib::weather_fog_ = nullptr;
 
@@ -52,19 +50,8 @@ void UWeatherLib::initWeather(UWorld* World, TArray<AActor*> ActorsToAttachTo)
         else {
             UE_LOG(LogTemp, Warning, TEXT("Warning, WeatherAPI got invalid weather actor class!"));
         }
-        // still need the menu class for f10
-        UClass* MenuActorClass = getWeatherMenuObjectPath().TryLoadClass<AActor>();
-        if (MenuActorClass) {
-            //UClass* Class, FTransform const* Transform, const FActorSpawnParameters& SpawnParameters = FActorSpawnParameters()
-            const FVector Location = FVector(0, 0, 0);
-            const FRotator Rotation = FRotator(0.0f, 0.0f, 0.0f);
-            FActorSpawnParameters SpawnInfo;
-            SpawnInfo.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-            World->SpawnActor(MenuActorClass, &Location, &Rotation, SpawnInfo);
-        }
-        else {
-            UE_LOG(LogTemp, Warning, TEXT("Warning, WeatherAPI got invalid menu actor class!"));
-        }
+        // BEIMING patch: 原版在此 spawn F10 天气菜单的 MenuActor，该功能已由
+        // 项目内 O 键仿真配置面板取代，不再生成
     }
 
     //showWeatherMenu(WorldContextObject);
@@ -161,89 +148,8 @@ void UWeatherLib::setWeatherEnabled(UWorld* World, bool bEnabled)
     }
     setWeatherParamScalar(World, EWeatherParamScalar::WEATHER_PARAM_SCALAR_WEATHERENABLED, Value);
 }
-void UWeatherLib::showWeatherMenu(UWorld* World)
-{
-    //UWorld* World = GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::LogAndReturnNull);
-
-    if (UClass* MenuWidgetClass = getWeatherMenuWidgetClass().TryLoadClass<UUserWidget>()) {
-        UUserWidget* MenuWidget = CreateWidget<UUserWidget>(World, MenuWidgetClass);
-
-        if (MenuWidget) {
-            MenuWidget->AddToViewport();
-        }
-
-        APlayerController* PC = UGameplayStatics::GetPlayerController(World, 0);
-        if (PC) {
-            PC->bShowMouseCursor = true;
-            PC->DisableInput(PC);
-        }
-    }
-    else {
-        UE_LOG(LogTemp, Warning, TEXT("Warning, WeatherAPI could not load weather widget!"));
-    }
-}
-void UWeatherLib::hideWeatherMenu(UWorld* World)
-{
-
-    //UWorld* World = GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::LogAndReturnNull);
-    UClass* MenuWidgetClass = getWeatherMenuWidgetClass().TryLoadClass<UUserWidget>();
-
-    if (World && MenuWidgetClass) {
-        // get all menu actors, if any
-        TArray<UUserWidget*> FoundWidgets;
-        UWidgetBlueprintLibrary::GetAllWidgetsOfClass(World, FoundWidgets, UUserWidget::StaticClass());
-
-        UE_LOG(LogTemp, Warning, TEXT("%s Warning, WeatherAPI"), *MenuWidgetClass->GetClass()->GetFName().ToString());
-
-        if (FoundWidgets.Num() > 0) {
-            for (int32 i = 0; i < FoundWidgets.Num(); i++) {
-                // hacky test to make sure we are getting the right class. for some reason cast above doesn't work, so we use this instead to test for class
-                if (FoundWidgets[i] && FoundWidgets[i]->GetClass()->GetFName().ToString() == getWeatherMenuClassName()) {
-                    FoundWidgets[i]->RemoveFromParent();
-                }
-            }
-            APlayerController* PC = UGameplayStatics::GetPlayerController(World, 0);
-            if (PC) {
-                PC->bShowMouseCursor = false;
-                PC->EnableInput(PC);
-            }
-        }
-    }
-}
-bool UWeatherLib::isMenuVisible(UWorld* World)
-{
-    //UWorld* World = GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::LogAndReturnNull);
-    UClass* MenuWidgetClass = getWeatherMenuWidgetClass().TryLoadClass<UUserWidget>();
-
-    if (World && MenuWidgetClass) {
-        // get all menu actors, if any
-        TArray<UUserWidget*> FoundWidgets;
-        UWidgetBlueprintLibrary::GetAllWidgetsOfClass(World, FoundWidgets, UUserWidget::StaticClass());
-
-        UE_LOG(LogTemp, Warning, TEXT("%s Warning, WeatherAPI"), *MenuWidgetClass->GetClass()->GetFName().ToString());
-
-        if (FoundWidgets.Num() > 0) {
-            for (int32 i = 0; i < FoundWidgets.Num(); i++) {
-                // hacky test to make sure we are getting the right class. for some reason cast above doesn't work, so we use this instead to test for class
-                if (FoundWidgets[i] && FoundWidgets[i]->GetClass()->GetFName().ToString() == getWeatherMenuClassName()) {
-                    return true;
-                }
-            }
-        }
-    }
-
-    // get all menu actors, if any, then hide the menu
-    return false;
-}
-void UWeatherLib::toggleWeatherMenu(UWorld* World)
-{
-    if (isMenuVisible(World)) {
-        hideWeatherMenu(World);
-    }
-    else {
-        showWeatherMenu(World);
-    }
-}
+// BEIMING patch: showWeatherMenu/hideWeatherMenu/isMenuVisible/toggleWeatherMenu 已删除，
+// 天气/风/时间调节由项目内 O 键仿真配置面板（BeimingSim 模块 SimConfigWidget）提供
 UWorld* UWeatherLib::widgetGetWorld(UUserWidget* Widget)
 {
     if (Widget) {
