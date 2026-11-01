@@ -332,14 +332,16 @@ void UDroneSwitchWidget::ShowTooltip(int32 Index)
 
     TooltipBorder->SetVisibility(ESlateVisibility::HitTestInvisible);
 
-    // 弹窗右缘紧贴菜单面板左缘（留 6px 缝隙），与悬停条目垂直居中对齐
+    // 弹窗右缘紧贴菜单面板左缘（留 6px 缝隙），与悬停条目垂直居中对齐。
+    // 注意：canvas 槽位坐标是本地逻辑坐标，必须用 AbsoluteToLocal 换算，
+    // 直接用绝对坐标相减在 DPI 缩放非 100% 的显示器上位置会偏移
     const FGeometry& RootGeom = GetCachedGeometry();
     if (TooltipSlot && PanelBorder && EntryButtons.IsValidIndex(Index))
     {
         const FGeometry& PanelGeom = PanelBorder->GetCachedGeometry();
         const FGeometry& EntryGeom = EntryButtons[Index]->GetCachedGeometry();
-        const FVector2D PanelPos = PanelGeom.GetAbsolutePosition() - RootGeom.GetAbsolutePosition();
-        const FVector2D EntryPos = EntryGeom.GetAbsolutePosition() - RootGeom.GetAbsolutePosition();
+        const FVector2D PanelPos = RootGeom.AbsoluteToLocal(PanelGeom.GetAbsolutePosition());
+        const FVector2D EntryPos = RootGeom.AbsoluteToLocal(EntryGeom.GetAbsolutePosition());
         const float EntryCenterY = EntryPos.Y + EntryGeom.GetLocalSize().Y * 0.5f;
         TooltipSlot->SetPosition(FVector2D(PanelPos.X - 6.f, EntryCenterY));
     }
