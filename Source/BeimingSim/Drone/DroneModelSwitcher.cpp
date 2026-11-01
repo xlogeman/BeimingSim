@@ -16,6 +16,8 @@
 
 // AirSim 多旋翼 Pawn（Rotation0~3 旋翼组件由其蓝图定义）
 #include "Vehicles/Multirotor/FlyingPawn.h"
+// AirSim SimMode：提供 reset() 整体重置（回到初始位姿 + 飞控/物理重置）
+#include "SimMode/SimModeBase.h"
 
 ADroneModelSwitcher::ADroneModelSwitcher()
 {
@@ -279,6 +281,18 @@ AFlyingPawn* ADroneModelSwitcher::FindDronePawn() const
     return nullptr;
 }
 
+void ADroneModelSwitcher::ResetSimulation()
+{
+    // SimMode 由 AirSim 的 SimHUD 在运行时动态生成。reset() 会把所有载具瞬移回
+    // 初始起飞位姿（TeleportPhysics）并重置飞控与物理引擎，效果等同重新点击 Play
+    for (TActorIterator<ASimModeBase> It(GetWorld()); It; ++It)
+    {
+        It->reset();
+        return;
+    }
+    UE_LOG(LogTemp, Warning, TEXT("DroneSwitcher: 未找到 AirSim SimMode，跳过位置重置"));
+}
+
 int32 ADroneModelSwitcher::GetCurrentModelIndex() const
 {
     const AFlyingPawn* Pawn = FindDronePawn();
@@ -318,6 +332,8 @@ void ADroneModelSwitcher::ApplyModel(int32 Index)
         return;
     }
     ApplyAppearanceFromBlueprint(Pawn, Blueprint);
+    // 换外观后整体重置：无人机回到初始起飞坐标、从空中掉落（等效重新点击 Play）
+    ResetSimulation();
     if (MenuWidget)
     {
         MenuWidget->HighlightSelected(Index);

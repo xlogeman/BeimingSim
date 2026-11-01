@@ -60,6 +60,8 @@ private:
     AFlyingPawn* FindDronePawn() const;
     /** 获取场景中当前无人机对应的菜单下标；无法识别时返回 -1（无选中项） */
     int32 GetCurrentModelIndex() const;
+    /** 通过 AirSim SimMode 重置仿真：无人机瞬移回初始起飞坐标并重置飞控/物理 */
+    void ResetSimulation();
     void ApplyAppearanceFromBlueprint(AFlyingPawn* Pawn, UBlueprint* Blueprint);
 
     UFUNCTION()
