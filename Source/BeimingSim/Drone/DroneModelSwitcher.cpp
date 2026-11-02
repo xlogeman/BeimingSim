@@ -46,12 +46,21 @@ void ADroneModelSwitcher::BeginPlay()
 
 void ADroneModelSwitcher::DiscoverModels()
 {
-    DiscoveredBlueprints.Reset();
+    DiscoveredClasses.Reset();
     DisplayNames.Reset();
 
-    // 第 0 项固定为 AirSim 自带的默认机型（支持"切回默认"）
-    DiscoveredBlueprints.Add(TSoftObjectPtr<UBlueprint>(FSoftObjectPath(DefaultPawnBlueprintPath)));
-    DisplayNames.Add(DefaultModelName);
+    // 第 0 项固定为 AirSim 自带的默认机型（支持"切回默认"）。
+    // 存的是蓝图生成的类（*_C）：UBlueprint 是编辑器专用类型，打包版无法加载，
+    // 资产路径追加 "_C" 后即指向其 BlueprintGeneratedClass（编辑器/打包版均可加载）
+    {
+        FString ClassPath = DefaultPawnBlueprintPath;
+        if (!ClassPath.EndsWith(TEXT("_C")))
+        {
+            ClassPath += TEXT("_C");
+        }
+        DiscoveredClasses.Add(TSoftClassPtr<AFlyingPawn>(FSoftObjectPath(ClassPath)));
+        DisplayNames.Add(DefaultModelName);
+    }
 
     IAssetRegistry* Registry = nullptr;
     if (FModuleManager::Get().IsModuleLoaded("AssetRegistry"))
@@ -64,35 +73,73 @@ void ADroneModelSwitcher::DiscoverModels()
         return;
     }
 
-    // 确保扫描目录已入注册表（编辑器/游戏启动早期可能还没扫到）
+#if WITH_EDITOR
+    // 编辑器下确保扫描目录已入注册表（启动早期可能还没异步扫到）
+    // 注意：打包版绝不能调用（尤其带 ForceRescan）——打包资产在 pak 里、磁盘上不存在，
+    // ForceRescan 会把预置注册表中该路径的资产条目按"磁盘已删除"清空，
+    // 导致后续 GetAssets 查不到任何机型（AssetRegistry.cpp: OldAssetsToRemove）
     Registry->ScanPathsSynchronous({ ScanPath }, true);
+#endif
 
+    // 查询扫描目录下的全部资产（不按类过滤，也不依赖类派生数据——
+    // 打包版注册表中不保证有派生关系数据，按目录扫描最稳妥），
+    // 随后在循环里按"蓝图/生成的类"特征预筛并加载验证是否 AFlyingPawn 子类
     FARFilter Filter;
     Filter.PackagePaths.Add(FName(*ScanPath));
     Filter.bRecursivePaths = true;
-    Filter.ClassPaths.Add(UBlueprint::StaticClass()->GetClassPathName());
 
     TArray<FAssetData> Assets;
     Registry->GetAssets(Filter, Assets);
+    UE_LOG(LogTemp, Log, TEXT("DroneSwitcher: 扫描 %s 下资产 %d 个"), *ScanPath, Assets.Num());
 
     TArray<FString> TempNames;
-    TArray<TSoftObjectPtr<UBlueprint>> TempBlueprints;
+    TArray<TSoftClassPtr<AFlyingPawn>> TempClasses;
+    TSet<FName> SeenPackages;
     for (const FAssetData& Asset : Assets)
     {
-        const UBlueprint* Blueprint = Cast<UBlueprint>(Asset.GetAsset());
-        if (!Blueprint || !Blueprint->GeneratedClass)
+        // 预筛：只要蓝图资产（编辑器下类为 Blueprint；打包下资产即生成的类，
+        // 对象路径以 "_C" 结尾）。材质/网格/纹理等直接跳过，避免无谓加载
+        const FString ObjectPath = Asset.ToSoftObjectPath().ToString();
+        const bool bIsBlueprintAsset =
+            Asset.AssetClassPath == UBlueprint::StaticClass()->GetClassPathName();
+        const bool bIsGeneratedClass = ObjectPath.EndsWith(TEXT("_C"));
+        if (!bIsBlueprintAsset && !bIsGeneratedClass)
         {
             continue;
         }
-        // 只要 AirSim 飞行 Pawn 的子类
-        if (Blueprint->GeneratedClass->IsChildOf(AFlyingPawn::StaticClass()))
+
+        // 编辑器下同一蓝图可能同时命中多个查询，按包名去重
+        if (SeenPackages.Contains(Asset.PackageName))
         {
-            TempBlueprints.Add(TSoftObjectPtr<UBlueprint>(Asset.ToSoftObjectPath()));
-            // 显示名取蓝图资产名（BP_X450 -> X450）
-            FString Name = Asset.AssetName.ToString();
-            Name.RemoveFromStart(TEXT("BP_"));
-            TempNames.Add(Name);
+            continue;
         }
+        SeenPackages.Add(Asset.PackageName);
+
+        // 资产对象路径在打包版即生成的类（*_C）；编辑器下为蓝图资产路径，同样补 "_C"
+        FString ClassPath = ObjectPath;
+        if (!ClassPath.EndsWith(TEXT("_C")))
+        {
+            ClassPath += TEXT("_C");
+        }
+
+        // 同步加载验证：确为 AFlyingPawn 子类才收入菜单（加载失败/类型不符则跳过）
+        // 注意用花括号初始化：圆括号会被 MSVC 解析成函数声明（most vexing parse）
+        TSoftClassPtr<AFlyingPawn> ClassRef{FSoftObjectPath(ClassPath)};
+        UClass* LoadedClass = ClassRef.LoadSynchronous();
+        if (!LoadedClass || !LoadedClass->IsChildOf(AFlyingPawn::StaticClass()))
+        {
+            continue;
+        }
+
+        TempClasses.Add(ClassRef);
+        // 显示名取蓝图资产名（BP_X450 -> X450）。打包版资产名可能带 "_C" 后缀
+        // （资产即生成的类），所以从包名推导更稳妥：/Game/UAV/BP_X450 -> X450
+        FString PackageName = Asset.PackageName.ToString();
+        int32 SlashIdx = 0;
+        PackageName.FindLastChar('/', SlashIdx);
+        FString Name = PackageName.Mid(SlashIdx + 1);
+        Name.RemoveFromStart(TEXT("BP_"));
+        TempNames.Add(Name);
     }
 
     // 按显示名字母序排序（不区分大小写），菜单展示与索引对应关系保持一致
@@ -107,10 +154,10 @@ void ADroneModelSwitcher::DiscoverModels()
     });
     for (int32 Idx : Order)
     {
-        DiscoveredBlueprints.Add(TempBlueprints[Idx]);
+        DiscoveredClasses.Add(TempClasses[Idx]);
         DisplayNames.Add(TempNames[Idx]);
         UE_LOG(LogTemp, Log, TEXT("DroneSwitcher: 发现机型 %s (%s)"),
-            *TempNames[Idx], *TempBlueprints[Idx].ToSoftObjectPath().ToString());
+            *TempNames[Idx], *TempClasses[Idx].ToSoftObjectPath().ToString());
     }
 }
 
@@ -126,16 +173,16 @@ void ADroneModelSwitcher::GenerateThumbnails()
     // 避免同帧生成+拍照时网格渲染代理尚未就绪拍到黑图
     TempInstances.Reset();
     const FVector SpawnLoc(0.0, 0.0, 5000.0);
-    for (int32 i = 0; i < DiscoveredBlueprints.Num(); ++i)
+    for (int32 i = 0; i < DiscoveredClasses.Num(); ++i)
     {
         AActor* Source = nullptr;
-        UBlueprint* Blueprint = DiscoveredBlueprints[i].LoadSynchronous();
-        if (Blueprint && Blueprint->GeneratedClass)
+        UClass* ModelClass = DiscoveredClasses[i].LoadSynchronous();
+        if (ModelClass)
         {
             FActorSpawnParameters Params;
             Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
             Params.ObjectFlags |= RF_Transient;
-            Source = GetWorld()->SpawnActor<AActor>(Blueprint->GeneratedClass, FTransform(SpawnLoc), Params);
+            Source = GetWorld()->SpawnActor<AActor>(ModelClass, FTransform(SpawnLoc), Params);
         }
         TempInstances.Add(Source);
     }
@@ -308,12 +355,12 @@ int32 ADroneModelSwitcher::GetCurrentModelIndex() const
     {
         return -1;
     }
-    // 与已发现的机型蓝图逐一比对类。启动时蓝图资产都还是未加载的软引用，
-    // 必须同步加载后才能拿到 GeneratedClass（缩略图阶段本就会全部加载，无额外开销）
-    for (int32 i = 0; i < DiscoveredBlueprints.Num(); ++i)
+    // 与已发现的机型类逐一比对。启动时机型类都还是未加载的软引用，
+    // 必须同步加载后才能比较（缩略图阶段本就会全部加载，无额外开销）
+    for (int32 i = 0; i < DiscoveredClasses.Num(); ++i)
     {
-        UBlueprint* Blueprint = DiscoveredBlueprints[i].LoadSynchronous();
-        if (Blueprint && Blueprint->GeneratedClass && Pawn->GetClass()->IsChildOf(Blueprint->GeneratedClass))
+        UClass* ModelClass = DiscoveredClasses[i].LoadSynchronous();
+        if (ModelClass && Pawn->GetClass()->IsChildOf(ModelClass))
         {
             return i;
         }
@@ -323,7 +370,7 @@ int32 ADroneModelSwitcher::GetCurrentModelIndex() const
 
 void ADroneModelSwitcher::ApplyModel(int32 Index)
 {
-    if (!DiscoveredBlueprints.IsValidIndex(Index))
+    if (!DiscoveredClasses.IsValidIndex(Index))
     {
         return;
     }
@@ -333,13 +380,13 @@ void ADroneModelSwitcher::ApplyModel(int32 Index)
         UE_LOG(LogTemp, Warning, TEXT("DroneSwitcher: 场景中没有 AFlyingPawn，无法切换外观"));
         return;
     }
-    UBlueprint* Blueprint = DiscoveredBlueprints[Index].LoadSynchronous();
-    if (!Blueprint)
+    UClass* ModelClass = DiscoveredClasses[Index].LoadSynchronous();
+    if (!ModelClass)
     {
-        UE_LOG(LogTemp, Warning, TEXT("DroneSwitcher: 蓝图加载失败"));
+        UE_LOG(LogTemp, Warning, TEXT("DroneSwitcher: 机型类加载失败"));
         return;
     }
-    ApplyAppearanceFromBlueprint(Pawn, Blueprint);
+    ApplyAppearanceFromBlueprint(Pawn, ModelClass);
     // 换外观后整体重置：无人机回到初始起飞坐标、从空中掉落（等效重新点击 Play）
     ResetSimulation();
     if (MenuWidget)
@@ -348,7 +395,7 @@ void ADroneModelSwitcher::ApplyModel(int32 Index)
     }
 
     const FString Name = DisplayNames.IsValidIndex(Index) ? DisplayNames[Index]
-        : DiscoveredBlueprints[Index].ToSoftObjectPath().GetAssetName();
+        : DiscoveredClasses[Index].ToSoftObjectPath().GetAssetName();
     if (GEngine)
     {
         GEngine->AddOnScreenDebugMessage((uint64)GetUniqueID() + Index + 1, 3.f, FColor::Green,
@@ -357,23 +404,18 @@ void ADroneModelSwitcher::ApplyModel(int32 Index)
     UE_LOG(LogTemp, Log, TEXT("DroneSwitcher: 外观已切换为 %s"), *Name);
 }
 
-void ADroneModelSwitcher::ApplyAppearanceFromBlueprint(AFlyingPawn* Pawn, UBlueprint* Blueprint)
+void ADroneModelSwitcher::ApplyAppearanceFromBlueprint(AFlyingPawn* Pawn, UClass* SourceClass)
 {
-    if (!Blueprint->GeneratedClass)
-    {
-        return;
-    }
-
     // 注意：蓝图 CDO 上不包含在蓝图编辑器里添加的组件（SCS 组件只在实例构造时创建），
     // 因此这里临时生成一个实例来读取装配状态，读完立刻销毁（同帧内，不会渲染出来）
     FActorSpawnParameters Params;
     Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
     Params.ObjectFlags |= RF_Transient;
-    AActor* Source = GetWorld()->SpawnActor<AActor>(Blueprint->GeneratedClass, FTransform::Identity, Params);
+    AActor* Source = GetWorld()->SpawnActor<AActor>(SourceClass, FTransform::Identity, Params);
     if (!Source)
     {
-        UE_LOG(LogTemp, Warning, TEXT("DroneSwitcher: 生成蓝图 %s 的临时实例失败"),
-            *Blueprint->GetName());
+        UE_LOG(LogTemp, Warning, TEXT("DroneSwitcher: 生成机型 %s 的临时实例失败"),
+            *SourceClass->GetName());
         return;
     }
 

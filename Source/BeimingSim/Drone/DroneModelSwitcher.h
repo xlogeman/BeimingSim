@@ -7,7 +7,6 @@
 
 class AFlyingPawn;
 class UDroneSwitchWidget;
-class UBlueprint;
 class UTexture;
 class UTextureRenderTarget2D;
 
@@ -71,7 +70,7 @@ private:
     int32 GetCurrentModelIndex() const;
     /** 通过 AirSim SimMode 重置仿真：无人机瞬移回初始起飞坐标并重置飞控/物理 */
     void ResetSimulation();
-    void ApplyAppearanceFromBlueprint(AFlyingPawn* Pawn, UBlueprint* Blueprint);
+    void ApplyAppearanceFromBlueprint(AFlyingPawn* Pawn, UClass* SourceClass);
 
     UFUNCTION()
     void ApplyModel(int32 Index);
@@ -79,15 +78,19 @@ private:
     UPROPERTY()
     UDroneSwitchWidget* MenuWidget = nullptr;
 
-    /** 扫描结果：可用的无人机蓝图（第 0 项固定为 AirSim 默认机型） */
+    /**
+     * 扫描结果：可用的无人机蓝图"生成的类"（第 0 项固定为 AirSim 默认机型）。
+     * 注意存的是 *_C 类而非 UBlueprint——UBlueprint 是编辑器专用类型，
+     * 打包版蓝图资产里只有生成的类，直接存类才能在打包版正常加载与切换。
+     */
     UPROPERTY()
-    TArray<TSoftObjectPtr<UBlueprint>> DiscoveredBlueprints;
+    TArray<TSoftClassPtr<AFlyingPawn>> DiscoveredClasses;
 
-    /** 与 DiscoveredBlueprints 一一对应的菜单显示名 */
+    /** 与 DiscoveredClasses 一一对应的菜单显示名 */
     UPROPERTY()
     TArray<FString> DisplayNames;
 
-    /** 与 DiscoveredBlueprints 一一对应的 3D 预览缩略图（可能为空） */
+    /** 与 DiscoveredClasses 一一对应的 3D 预览缩略图（可能为空） */
     UPROPERTY(Transient)
     TArray<TObjectPtr<UTexture>> ModelThumbnails;
 
