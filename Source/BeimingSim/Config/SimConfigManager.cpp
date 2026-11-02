@@ -552,11 +552,11 @@ void ASimConfigManager::GetEntryParams(const FSimSettingsEntry& Entry, TArray<FS
 {
     OutParams.Reset();
 
-    // 合成条目：json 里还没有，给一个最小骨架（SensorType/Enabled），应用时创建
+    // 合成条目：json 里还没有，给一个最小骨架（Enabled/SensorType），应用时创建
     if (Entry.bSynthetic)
     {
-        OutParams.Add({ TEXT("SensorType"), FString::FromInt(Entry.SensorType), 1 });
         OutParams.Add({ TEXT("Enabled"), TEXT("true"), 0 });
+        OutParams.Add({ TEXT("SensorType"), FString::FromInt(Entry.SensorType), 1 });
         return;
     }
 
@@ -596,6 +596,19 @@ void ASimConfigManager::GetEntryParams(const FSimSettingsEntry& Entry, TArray<FS
             continue;
         }
         OutParams.Add(Param);
+    }
+
+    // Enabled 是传感器/相机存在的前提，统一提到参数列表第一位
+    // （json 里 Enabled 写在什么位置都会被移到最前，保证面板上第一眼就能看到总开关）
+    for (int32 i = 0; i < OutParams.Num(); ++i)
+    {
+        if (OutParams[i].Key == TEXT("Enabled"))
+        {
+            FSimSensorParam Enabled = MoveTemp(OutParams[i]);
+            OutParams.RemoveAt(i);
+            OutParams.Insert(MoveTemp(Enabled), 0);
+            break;
+        }
     }
 
     // 相机条目：json 未显式写 Enabled 时注入默认 true 行，保证面板始终有开关可调

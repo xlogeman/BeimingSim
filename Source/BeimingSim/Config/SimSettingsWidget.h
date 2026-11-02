@@ -65,9 +65,11 @@ private:
     void AddEntrySection(UVerticalBox* Content);
     /** 按当前选中条目重建参数键值行；bFetchFromManager=false 时保留内存中的 SensorParams（新增参数后重建行用） */
     void RebuildSensorRows(bool bFetchFromManager = true);
-    /** 选中指定显示名的条目并重建参数行；名称为空或未命中时保持当前选中 */
-    void SelectEntryByName(const FString& Name);
+    /** 选中指定显示名的条目并重建参数行；名称为空或未命中时保持当前选中，返回是否命中 */
+    bool SelectEntryByName(const FString& Name);
     void SetStatusText(const FString& Text);
+    /** 更新面板标题：机型名为空时只显示基础标题，否则显示"settings.json 配置 · 机型名" */
+    void SetTitle(const FString& ModelName);
 
     UPROPERTY()
     UCanvasPanel* RootCanvas = nullptr;
@@ -81,6 +83,10 @@ private:
 
     UPROPERTY()
     TObjectPtr<UTextBlock> StatusLabel = nullptr;
+
+    /** 面板标题（选中载具条目时附加显示机型名） */
+    UPROPERTY()
+    TObjectPtr<UTextBlock> TitleLabel = nullptr;
 
     // ---- settings 对象编辑区 ----
     UPROPERTY()

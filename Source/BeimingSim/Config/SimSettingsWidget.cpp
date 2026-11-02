@@ -136,10 +136,10 @@ void USimSettingsWidget::BuildPanel(ASimConfigManager* InManager)
     UVerticalBox* Box = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("Box"));
     Panel->SetContent(Box);
 
-    // 标题行（右缘带关闭按钮）+ 强调色下划线
+    // 标题行（右缘带关闭按钮）+ 强调色下划线；选中载具条目时标题后附加机型名
+    TitleLabel = MakeLabel(TEXT("settings.json 配置"), 20, FLinearColor::White, true);
     UHorizontalBox* TitleRow = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("TitleRow"));
-    UHorizontalBoxSlot* TitleSlot = TitleRow->AddChildToHorizontalBox(
-        MakeLabel(TEXT("settings.json 配置"), 20, FLinearColor::White, true));
+    UHorizontalBoxSlot* TitleSlot = TitleRow->AddChildToHorizontalBox(TitleLabel);
     TitleSlot->SetVerticalAlignment(VAlign_Center);
     TitleSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
     UButton* CloseBtn = MakeButton(TEXT("关闭"));
@@ -201,7 +201,13 @@ void USimSettingsWidget::OpenPanel(const FString& PreferEntryName)
 {
     bOpen = true;
     RefreshFromSettings();
-    SelectEntryByName(PreferEntryName);
+    // 标题无条件带上被点击的机型名：settings.json 中没有同名载具条目时自动选中会失败，
+    // 但机型名仍要展示，否则用户不知道这个面板是为哪架飞机打开的
+    if (!PreferEntryName.IsEmpty())
+    {
+        SetTitle(PreferEntryName);
+        SelectEntryByName(PreferEntryName);
+    }
 }
 
 void USimSettingsWidget::TogglePanel()
@@ -265,11 +271,11 @@ void USimSettingsWidget::AddEntrySection(UVerticalBox* Content)
     }
 }
 
-void USimSettingsWidget::SelectEntryByName(const FString& Name)
+bool USimSettingsWidget::SelectEntryByName(const FString& Name)
 {
     if (Name.IsEmpty() || !EntryCombo)
     {
-        return;
+        return false;
     }
     for (const FSimSettingsEntry& Ref : EntryRefs)
     {
@@ -277,9 +283,10 @@ void USimSettingsWidget::SelectEntryByName(const FString& Name)
         {
             // 下拉框选项与 EntryRefs 一一对应；SetSelectedOption 触发 OnEntrySelected 重建参数行
             EntryCombo->SetSelectedOption(Name);
-            return;
+            return true;
         }
     }
+    return false;
 }
 
 void USimSettingsWidget::RebuildSensorRows(bool bFetchFromManager)
@@ -385,6 +392,8 @@ void USimSettingsWidget::OnEntrySelected(FString SelectedItem, ESelectInfo::Type
         if (Ref.DisplayName == SelectedItem)
         {
             CurrentEntryRef = Ref;
+            // 载具条目（路径 Vehicles/<机型名>）时标题后附加机型名，其余条目只显示基础标题
+            SetTitle(Ref.Path.Num() == 2 && Ref.Path[0] == TEXT("Vehicles") ? Ref.DisplayName : FString());
             RebuildSensorRows();
             return;
         }
@@ -534,4 +543,15 @@ void USimSettingsWidget::SetStatusText(const FString& Text)
     {
         StatusLabel->SetText(FText::FromString(Text));
     }
+}
+
+void USimSettingsWidget::SetTitle(const FString& ModelName)
+{
+    if (!TitleLabel)
+    {
+        return;
+    }
+    TitleLabel->SetText(ModelName.IsEmpty()
+        ? FText::FromString(TEXT("settings.json 配置"))
+        : FText::FromString(FString::Printf(TEXT("settings.json 配置 · %s"), *ModelName)));
 }

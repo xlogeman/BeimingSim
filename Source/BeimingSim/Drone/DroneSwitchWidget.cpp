@@ -133,11 +133,14 @@ UButton* UDroneSwitchWidget::MakeEntryButton(int32 Index)
     ImgSlot->SetPadding(FMargin(0, 0, 14, 0));
     ImgSlot->SetVerticalAlignment(VAlign_Center);
 
-    // 机型名
+    // 机型名：Fill 槽位下超长名字不会挤压行尾按钮，超出宽度用省略号截断，
+    // 右侧留 12px 间距，任何长度都不会紧贴行尾的"设置"按钮
     UTextBlock* Label = MakeLabel(Index < ModelNames.Num() ? ModelNames[Index] : TEXT(""), 16, FLinearColor::White);
+    Label->SetTextOverflowPolicy(ETextOverflowPolicy::Ellipsis);
     UHorizontalBoxSlot* LabelSlot = Row->AddChildToHorizontalBox(Label);
     LabelSlot->SetVerticalAlignment(VAlign_Center);
     LabelSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+    LabelSlot->SetPadding(FMargin(0, 0, 12, 0));
 
     // 行尾"设置"按钮：打开该机型的仿真配置面板（嵌套按钮，点击不会触发外层条目选中）
     UButton* SettingsBtn = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(),
@@ -149,7 +152,10 @@ UButton* UDroneSwitchWidget::MakeEntryButton(int32 Index)
     SettingsStyle.SetNormalPadding(FMargin(10.f, 4.f));
     SettingsStyle.SetPressedPadding(FMargin(10.f, 4.f));
     SettingsBtn->SetStyle(SettingsStyle);
+    // 统一"设置"按钮宽度（文字居中），不同行之间视觉上完全对齐
     UTextBlock* SettingsLabel = MakeLabel(TEXT("设置"), 12, ParamLabelColor);
+    SettingsLabel->SetJustification(ETextJustify::Center);
+    SettingsLabel->SetMinDesiredWidth(48.f);
     SettingsBtn->AddChild(SettingsLabel);
     switch (Index)
     {
@@ -218,15 +224,15 @@ void UDroneSwitchWidget::ApplyEntryStyle(int32 Index)
     const FLinearColor Outline = bSelected ? Accent : FLinearColor(0.f, 0.f, 0.f, 0.f);
 
     FButtonStyle Style = FCoreStyle::Get().GetWidgetStyle<FButtonStyle>("Button");
+    // 行按钮保持可用（禁用整行会连同行内嵌套的"设置"按钮一起失效），
+    // 重复点击选中机型由 RequestPick 里的下标判断直接忽略；
+    // 选中态外观（强调色描边）通过 Normal/Hovered/Pressed 样式表达
     Style.Normal = FSlateRoundedBoxBrush(EntryBg, EntryRadius, Outline, OutlineWidth);
-    Style.Hovered = FSlateRoundedBoxBrush(EntryHoverBg, EntryRadius, Outline, OutlineWidth);
-    Style.Pressed = FSlateRoundedBoxBrush(EntryPressBg, EntryRadius, bSelected ? Accent : Outline, OutlineWidth);
-    // 选中机型整体禁用（不可再次点击），Disabled 态保持选中高亮观感
-    Style.Disabled = FSlateRoundedBoxBrush(EntryBg, EntryRadius, Accent, OutlineWidth);
+    Style.Hovered = FSlateRoundedBoxBrush(bSelected ? EntryBg : EntryHoverBg, EntryRadius, Outline, OutlineWidth);
+    Style.Pressed = FSlateRoundedBoxBrush(bSelected ? EntryBg : EntryPressBg, EntryRadius, bSelected ? Accent : Outline, OutlineWidth);
     Style.SetNormalPadding(FMargin(12.f, 8.f));
     Style.SetPressedPadding(FMargin(12.f, 8.f));
     EntryButtons[Index]->SetStyle(Style);
-    EntryButtons[Index]->SetIsEnabled(!bSelected);
 
     if (EntryLabels.IsValidIndex(Index))
     {

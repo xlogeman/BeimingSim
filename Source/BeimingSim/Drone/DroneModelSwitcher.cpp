@@ -374,12 +374,8 @@ int32 ADroneModelSwitcher::GetCurrentModelIndex() const
 
 void ADroneModelSwitcher::OpenSettingsPanel(int32 ModelIndex)
 {
-    // 收起机型菜单，再唤出居中的仿真配置面板，并尝试选中该机型对应的载具配置条目
+    // 保持机型菜单展开，直接唤出居中的仿真配置面板，并尝试选中该机型对应的载具配置条目
     // （配置面板由 SimConfigManager 在 BeginPlay 创建，GameMode 同一批生成，必然已就绪）
-    if (MenuWidget && MenuWidget->IsInViewport())
-    {
-        MenuWidget->ToggleMenu();
-    }
     const FString PreferEntryName = DisplayNames.IsValidIndex(ModelIndex)
         ? DisplayNames[ModelIndex] : FString();
     for (TActorIterator<ASimConfigManager> It(GetWorld()); It; ++It)
