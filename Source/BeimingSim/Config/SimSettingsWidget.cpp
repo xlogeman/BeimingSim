@@ -36,6 +36,27 @@ namespace
     const FLinearColor BtnPressBg(0.10f, 0.12f, 0.19f, 1.f);
     constexpr float PanelRadius = 12.f;
     constexpr float ScrollHeight = 600.f;
+    /** 数值参数输入框宽度：数值通常只有几位数字，固定窄宽度避免拉满整行 */
+    constexpr float NumericInputWidth = 160.f;
+    /** 键名列固定宽度：所有常规参数的值按此列左对齐 */
+    constexpr float KeyColumnWidth = 170.f;
+    /** 长名参数解除限宽后，名字与值之间的间距（避免紧挨着键名） */
+    constexpr float KeyShiftGap = 12.f;
+    // 键名渲染宽度估算（12 号 Regular 字体）：ASCII 字符窄宽、中文等全角字符全宽。
+    // 仅用于与固定列宽比较决定是否右移，不要求精确。
+    constexpr float KeyCharWidthAscii = 7.f;
+    constexpr float KeyCharWidthWide = 13.f;
+
+    /** 估算键名渲染宽度（ASCII 按窄宽、全角按全宽累计） */
+    float EstimateKeyWidth(const FString& Key)
+    {
+        float Width = 0.f;
+        for (const TCHAR C : Key)
+        {
+            Width += (static_cast<uint32>(C) > 127) ? KeyCharWidthWide : KeyCharWidthAscii;
+        }
+        return Width;
+    }
 
     /** 圆角矩形刷子（可指定尺寸，用于需要固定大小的场合） */
     FSlateRoundedBoxBrush MakeRoundBrush(const FLinearColor& Color, float Radius, FVector2D Size = FVector2D::ZeroVector)
@@ -318,11 +339,22 @@ void USimSettingsWidget::RebuildSensorRows(bool bFetchFromManager)
     {
         UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
 
-        // 键名
-        USizeBox* KeyBox = WidgetTree->ConstructWidget<USizeBox>();
-        KeyBox->SetWidthOverride(170.f);
-        KeyBox->SetContent(MakeLabel(Param.Key, 12, ParamLabelColor));
-        Row->AddChildToHorizontalBox(KeyBox)->SetVerticalAlignment(VAlign_Center);
+        // 键名：常规参数固定列宽对齐；仅当键名估算宽度超过固定列宽（值确实会向右移）
+        // 时才解除限宽，右移后在名字与值之间留出间距，避免紧挨键名或长名溢出遮挡数值
+        if (EstimateKeyWidth(Param.Key) > KeyColumnWidth)
+        {
+            UTextBlock* LongKeyLabel = MakeLabel(Param.Key, 12, ParamLabelColor);
+            UHorizontalBoxSlot* LongKeySlot = Row->AddChildToHorizontalBox(LongKeyLabel);
+            LongKeySlot->SetVerticalAlignment(VAlign_Center);
+            LongKeySlot->SetPadding(FMargin(0, 0, KeyShiftGap, 0));
+        }
+        else
+        {
+            USizeBox* KeyBox = WidgetTree->ConstructWidget<USizeBox>();
+            KeyBox->SetWidthOverride(KeyColumnWidth);
+            KeyBox->SetContent(MakeLabel(Param.Key, 12, ParamLabelColor));
+            Row->AddChildToHorizontalBox(KeyBox)->SetVerticalAlignment(VAlign_Center);
+        }
 
         int32 RowType = 3;
         if (Param.Type == 0)
@@ -341,9 +373,21 @@ void USimSettingsWidget::RebuildSensorRows(bool bFetchFromManager)
             UEditableTextBox* Box = WidgetTree->ConstructWidget<UEditableTextBox>();
             Box->SetWidgetStyle(MakeTextBoxStyle());
             Box->SetText(FText::FromString(Param.RawValue));
-            UHorizontalBoxSlot* BoxSlot = Row->AddChildToHorizontalBox(Box);
+            // 数值参数（几位数字）用固定窄宽度左对齐；字符串参数可能较长，保持拉满整行
+            UWidget* ValueWidget = Box;
+            if (Param.Type == 1)
+            {
+                USizeBox* ValueBox = WidgetTree->ConstructWidget<USizeBox>();
+                ValueBox->SetWidthOverride(NumericInputWidth);
+                ValueBox->SetContent(Box);
+                ValueWidget = ValueBox;
+            }
+            UHorizontalBoxSlot* BoxSlot = Row->AddChildToHorizontalBox(ValueWidget);
             BoxSlot->SetVerticalAlignment(VAlign_Center);
-            BoxSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+            if (Param.Type != 1)
+            {
+                BoxSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+            }
             SensorTexts.Add(Box);
             RowType = Param.Type;
         }

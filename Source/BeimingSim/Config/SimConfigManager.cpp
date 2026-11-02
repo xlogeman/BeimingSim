@@ -380,6 +380,16 @@ namespace
         }
         return bHasDigit;
     }
+
+    /**
+     * 多旋翼飞行必不可少的传感器类型（AirLib SensorBase.hpp）：
+     * 1 气压计 / 2 IMU / 3 GPS / 4 磁力计。
+     * 缺一不可，不向用户开放 Enabled 开关（面板不显示，写回时强制为 true）。
+     */
+    bool IsEssentialSensorType(int32 SensorType)
+    {
+        return SensorType >= 1 && SensorType <= 4;
+    }
 }
 
 int32 ASimConfigManager::DetectValueType(const FString& Value)
@@ -548,7 +558,11 @@ void ASimConfigManager::GetEntryParams(const FSimSettingsEntry& Entry, TArray<FS
     // 合成条目：json 里还没有，给一个最小骨架（Enabled/SensorType），应用时创建
     if (Entry.bSynthetic)
     {
-        OutParams.Add({ TEXT("Enabled"), TEXT("true"), 0 });
+        // 必备传感器（内置默认四件套全是）不提供 Enabled 开关
+        if (!IsEssentialSensorType(Entry.SensorType))
+        {
+            OutParams.Add({ TEXT("Enabled"), TEXT("true"), 0 });
+        }
         OutParams.Add({ TEXT("SensorType"), FString::FromInt(Entry.SensorType), 1 });
         return;
     }
@@ -589,6 +603,20 @@ void ASimConfigManager::GetEntryParams(const FSimSettingsEntry& Entry, TArray<FS
             continue;
         }
         OutParams.Add(Param);
+    }
+
+    // 必备传感器（气压计/IMU/GPS/磁力计）不给用户开关 Enabled：
+    // 直接从参数列表移除（面板不再显示开关），写回时强制为 true（见 ApplyEntryParams）
+    if (IsEssentialSensorType(Entry.SensorType))
+    {
+        for (int32 i = 0; i < OutParams.Num(); ++i)
+        {
+            if (OutParams[i].Key == TEXT("Enabled"))
+            {
+                OutParams.RemoveAt(i);
+                break;
+            }
+        }
     }
 
     // Enabled 是传感器/相机存在的前提，统一提到参数列表第一位
@@ -699,6 +727,13 @@ bool ASimConfigManager::ApplyEntryParams(const FSimSettingsEntry& Entry, const T
         }
     }
 
+    // 必备传感器（气压计/IMU/GPS/磁力计）强制启用：
+    // 面板不提供开关，历史配置里的 Enabled=false 也在本次写回时纠正为 true
+    if (IsEssentialSensorType(Entry.SensorType))
+    {
+        Target->SetBoolField(TEXT("Enabled"), true);
+    }
+
     // 相机条目：FOV_Degrees 不是相机对象的直接字段，而是写入该相机 CaptureSettings 的
     // 全部元素（与运行时 setCameraFoV 对所有 ImageType 生效的语义一致）；
     // 相机尚无 CaptureSettings 时补建 ImageType 0 的场景元素
@@ -744,6 +779,11 @@ bool ASimConfigManager::ApplyEntryParams(const FSimSettingsEntry& Entry, const T
     for (const FSimSensorParam& Param : RemainingParams)
     {
         if (Param.Type == 3 || Param.Key.IsEmpty())
+        {
+            continue;
+        }
+        // 必备传感器的 Enabled 不接受写回（含"新增参数"手工添加 Enabled 的场合）
+        if (IsEssentialSensorType(Entry.SensorType) && Param.Key == TEXT("Enabled"))
         {
             continue;
         }

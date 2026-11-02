@@ -22,7 +22,7 @@ struct FSimSettingsEntry
     TArray<FString> Path;
     /** 面板显示名 */
     FString DisplayName;
-    /** 传感器条目的 SensorType（AirLib SensorBase.hpp：1 气压计 2 IMU 3 GPS 4 磁力计 5 距离 6 Lidar 7 Echo 8 GPULidar 9 模板 10 UWB 11 WiFi） */
+    /** 传感器条目的 SensorType（AirLib SensorBase.hpp：1 气压计 2 IMU 3 GPS 4 磁力计 5 距离 6 Lidar 7 Echo 8 GPULidar 9 模板 10 UWB 11 WiFi）；1-4 为多旋翼必备传感器，不开放 Enabled 开关 */
     int32 SensorType = 0;
     /** settings.json 中尚不存在该定义（当前用内置默认），应用时自动创建 */
     bool bSynthetic = false;
@@ -86,11 +86,15 @@ public:
      */
     void GetEntryList(TArray<FSimSettingsEntry>& OutEntries) const;
 
-    /** 读取某个条目对象的全部键值对（标量可编辑；对象/数组复合值只读展示） */
+    /**
+     * 读取某个条目对象的全部键值对（标量可编辑；对象/数组复合值只读展示）。
+     * 必备传感器（气压计/IMU/GPS/磁力计）不返回 Enabled 行（面板无开关）。
+     */
     void GetEntryParams(const FSimSettingsEntry& Entry, TArray<FSimSensorParam>& OutParams) const;
 
     /**
      * 写回某个条目的参数（Type==3 的只读项自动跳过），自动备份 .bak 并原地重建 SimMode。
+     * 必备传感器的 Enabled 强制为 true（历史配置为 false 时一并纠正，且不接受写回）。
      * ClockSpeed >= 0 时同时把时钟速度写入根设置（单次落盘、单次重建）。
      */
     bool ApplyEntryParams(const FSimSettingsEntry& Entry, const TArray<FSimSensorParam>& Params,

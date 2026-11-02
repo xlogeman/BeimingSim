@@ -9,10 +9,12 @@
 #include "Components/HorizontalBoxSlot.h"
 #include "Components/Image.h"
 #include "Components/SizeBox.h"
+#include "Components/SizeBoxSlot.h"
 #include "Components/Spacer.h"
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
+#include "Engine/Texture2D.h"
 #include "Styling/CoreStyle.h"
 #include "Blueprint/WidgetTree.h"
 
@@ -28,6 +30,11 @@ namespace
     const FLinearColor Accent(0.15f, 0.62f, 0.95f, 1.f);
     const FLinearColor TooltipBg(0.05f, 0.06f, 0.11f, 0.97f);
     const FLinearColor ParamLabelColor(0.62f, 0.68f, 0.76f, 1.f);
+    // 齿轮（设置）按钮专属配色：比条目卡片底色更深一档 + 细描边，与卡片明显区分
+    const FLinearColor GearBtnBg(0.02f, 0.03f, 0.06f, 0.95f);
+    const FLinearColor GearBtnHoverBg(0.09f, 0.12f, 0.20f, 0.95f);
+    const FLinearColor GearBtnPressBg(0.01f, 0.02f, 0.04f, 0.95f);
+    const FLinearColor GearBtnOutline(0.28f, 0.34f, 0.46f, 0.60f);
     constexpr float PanelRadius = 12.f;
     constexpr float EntryRadius = 8.f;
     constexpr float TooltipRadius = 10.f;
@@ -36,6 +43,70 @@ namespace
     const FVector2D TooltipImageSize(220.f, 220.f);
     // 介绍文字强制换行宽度
     constexpr float TooltipTextWidth = 240.f;
+
+    // ---- 行尾"设置"按钮的齿轮图标（程序生成纹理，打包版可用，不依赖编辑器图标资产）----
+    constexpr float GearIconDisplaySize = 22.f;   // 按钮内显示尺寸
+    constexpr float GearButtonPad = 10.f;         // 按钮四边内边距（与图标尺寸配合构成正方形按钮）
+    constexpr int32 GearTextureSize = 64;         // 纹理分辨率（缩小显示获得更平滑边缘）
+
+    /** 生成白色齿轮图标纹理（透明背景 + 2px 抗锯齿），颜色由 UImage 着色；进程内缓存共用 */
+    UTexture2D* GetGearIconTexture()
+    {
+        static UTexture2D* GearTex = nullptr;
+        if (GearTex && IsValid(GearTex))
+        {
+            return GearTex;
+        }
+        GearTex = UTexture2D::CreateTransient(GearTextureSize, GearTextureSize, PF_B8G8R8A8);
+        if (!GearTex)
+        {
+            return nullptr;
+        }
+        GearTex->SRGB = true;
+        GearTex->NeverStream = true;
+
+        FTexturePlatformData* PlatformData = GearTex->GetPlatformData();
+        if (!PlatformData || PlatformData->Mips.Num() == 0)
+        {
+            GearTex = nullptr;
+            return nullptr;
+        }
+        constexpr float Teeth = 8.f;     // 齿数
+        constexpr float BodyR = 0.56f;   // 齿根圆半径（归一化半边长）
+        constexpr float ToothH = 0.22f;  // 齿高
+        constexpr float HoleR = 0.22f;   // 中孔半径
+        const float Half = GearTextureSize * 0.5f;
+        const float AA = 2.f / Half;     // 抗锯齿过渡带（约 2 像素）
+
+        // 直接锁写第 0 层 mip 数据（UE 5.8 无 GetMipData 便捷接口）
+        uint8* MipData = static_cast<uint8*>(PlatformData->Mips[0].BulkData.Lock(LOCK_READ_WRITE));
+
+        for (int32 y = 0; y < GearTextureSize; ++y)
+        {
+            for (int32 x = 0; x < GearTextureSize; ++x)
+            {
+                const float U = (x + 0.5f - Half) / Half;
+                const float V = (y + 0.5f - Half) / Half;
+                const float R = FMath::Sqrt(U * U + V * V);
+                const float Ang = FMath::Atan2(V, U);
+                // 角向周期波（正弦 + 平滑阶梯）形成梯形齿廓
+                const float Tooth = FMath::SmoothStep(0.f, 0.5f, FMath::Sin(Teeth * Ang));
+                // 径向有符号距离：>0 在齿轮轮廓内
+                float Alpha = FMath::Clamp((BodyR + ToothH * Tooth - R) / AA * 0.5f + 0.5f, 0.f, 1.f);
+                // 中孔挖空
+                Alpha *= FMath::Clamp((R - HoleR) / AA * 0.5f + 0.5f, 0.f, 1.f);
+
+                uint8* Px = MipData + (static_cast<int64>(y) * GearTextureSize + x) * 4;
+                Px[0] = 255; // B
+                Px[1] = 255; // G
+                Px[2] = 255; // R
+                Px[3] = static_cast<uint8>(Alpha * 255.f); // A
+            }
+        }
+        PlatformData->Mips[0].BulkData.Unlock();
+        GearTex->UpdateResource();
+        return GearTex;
+    }
 }
 
 void UDroneSwitchWidget::BuildMenu(const TArray<FString>& InModelNames)
@@ -146,17 +217,43 @@ UButton* UDroneSwitchWidget::MakeEntryButton(int32 Index)
     UButton* SettingsBtn = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(),
         *FString::Printf(TEXT("Settings%d"), Index));
     FButtonStyle SettingsStyle = FCoreStyle::Get().GetWidgetStyle<FButtonStyle>("Button");
-    SettingsStyle.Normal = FSlateRoundedBoxBrush(EntryBg, EntryRadius);
-    SettingsStyle.Hovered = FSlateRoundedBoxBrush(EntryHoverBg, EntryRadius);
-    SettingsStyle.Pressed = FSlateRoundedBoxBrush(EntryPressBg, EntryRadius);
-    SettingsStyle.SetNormalPadding(FMargin(10.f, 4.f));
-    SettingsStyle.SetPressedPadding(FMargin(10.f, 4.f));
+    // 齿轮按钮配色与条目卡片明显区分：更深底色 + 细描边，避免融进卡片背景
+    SettingsStyle.Normal = FSlateRoundedBoxBrush(GearBtnBg, EntryRadius, GearBtnOutline, 1.f);
+    SettingsStyle.Hovered = FSlateRoundedBoxBrush(GearBtnHoverBg, EntryRadius, GearBtnOutline, 1.f);
+    SettingsStyle.Pressed = FSlateRoundedBoxBrush(GearBtnPressBg, EntryRadius, GearBtnOutline, 1.f);
+    // 四边对称内边距 + 方形图标 = 正方形按钮（图标 22 + 边距 10*2 = 42px）
+    SettingsStyle.SetNormalPadding(FMargin(GearButtonPad));
+    SettingsStyle.SetPressedPadding(FMargin(GearButtonPad));
     SettingsBtn->SetStyle(SettingsStyle);
-    // 统一"设置"按钮宽度（文字居中），不同行之间视觉上完全对齐
-    UTextBlock* SettingsLabel = MakeLabel(TEXT("设置"), 12, ParamLabelColor);
-    SettingsLabel->SetJustification(ETextJustify::Center);
-    SettingsLabel->SetMinDesiredWidth(48.f);
-    SettingsBtn->AddChild(SettingsLabel);
+    // 齿轮图标（程序生成纹理）：白色纹理由 UImage 着色为参数灰；
+    // SizeBox 固定宽度保证各行按钮对齐（与原文字按钮同宽）；纯图标按钮配悬停文字提示
+    if (UTexture2D* GearTex = GetGearIconTexture())
+    {
+        SettingsBtn->SetToolTipText(FText::FromString(TEXT("设置：打开该机型的仿真参数配置")));
+        UImage* GearImg = WidgetTree->ConstructWidget<UImage>(UImage::StaticClass(),
+            *FString::Printf(TEXT("GearIcon%d"), Index));
+        FSlateBrush GearBrush;
+        GearBrush.DrawAs = ESlateBrushDrawType::Image;
+        GearBrush.ImageSize = FVector2D(GearIconDisplaySize, GearIconDisplaySize);
+        GearBrush.SetResourceObject(GearTex);
+        GearImg->SetBrush(GearBrush);
+        GearImg->SetColorAndOpacity(ParamLabelColor);
+        SettingsBtn->AddChild(GearImg);
+        // 内容在按钮内居中：正方形按钮 = 图标尺寸 + 四边对称内边距
+        if (UButtonSlot* GearSlot = Cast<UButtonSlot>(GearImg->Slot))
+        {
+            GearSlot->SetHorizontalAlignment(HAlign_Center);
+            GearSlot->SetVerticalAlignment(VAlign_Center);
+        }
+    }
+    else
+    {
+        // 纹理生成失败兜底：沿用文字按钮
+        UTextBlock* SettingsLabel = MakeLabel(TEXT("设置"), 12, ParamLabelColor);
+        SettingsLabel->SetJustification(ETextJustify::Center);
+        SettingsLabel->SetMinDesiredWidth(48.f);
+        SettingsBtn->AddChild(SettingsLabel);
+    }
     switch (Index)
     {
     case 0: SettingsBtn->OnClicked.AddDynamic(this, &UDroneSwitchWidget::OnSettings0); break;
