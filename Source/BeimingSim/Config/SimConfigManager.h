@@ -5,6 +5,7 @@
 #include "SimConfigManager.generated.h"
 
 class USimConfigWidget;
+class USimSettingsWidget;
 
 /**
  * settings.json 可编辑对象条目：从根到某个 json 对象的字段路径。
@@ -39,14 +40,15 @@ struct FSimSensorParam
 };
 
 /**
- * 仿真配置管理器：运行时按 O 呼出配置面板（USimConfigWidget），
- * 把面板配置落到 AirSim 运行时 API 或 settings.json。
+ * 仿真配置管理器：管理两个配置面板，把面板配置落到 AirSim 运行时 API 或 settings.json。
  * 由 BeimingSimGameMode 在 BeginPlay 自动生成，无需在关卡里摆放。
  *
- * 两条生效通道：
- * - 即时：天气/风/相机 FOV/暂停/时间模拟 → UWeatherLib 与 ASimModeBase 的运行时 setter；
- * - 重建：时钟速度等结构性配置 → 写回 settings.json（自动备份 .bak）→
- *   调用 ASimHUD::RecreateSimMode() 原地销毁重建 SimMode（API server 一并重启）。
+ * 两个面板与两条生效通道：
+ * - USimConfigWidget（O 键呼出，屏幕右侧滑出）：环境调整——天气/风/相机 FOV/暂停/时间模拟
+ *   即时生效（UWeatherLib 与 ASimModeBase 的运行时 setter）；时钟速度走 settings.json 重建；
+ * - USimSettingsWidget（机型菜单各条目"设置"按钮呼出，屏幕居中）：settings.json 对象级编辑
+ *   ——写回文件（自动备份 .bak）→ 调用 ASimHUD::RecreateSimMode() 原地销毁重建 SimMode
+ *   （API server 一并重启）。
  */
 UCLASS()
 class BEIMINGSIM_API ASimConfigManager : public AActor
@@ -67,10 +69,10 @@ public:
 
     /**
      * 写回 settings.json（自动备份为 .bak）并原地销毁重建 SimMode。
-     * 当前支持的结构化配置：时钟速度（ClockSpeed）；
+     * ClockSpeed >= 0 时同时把时钟速度写入根设置（< 0 表示不改时钟）；
      * 写回后 SimMode 按新配置重建，也可先手工编辑 json 再点重建（重建时以文件为准）。
      */
-    bool ApplyAndRebuild(float ClockSpeed);
+    bool ApplyAndRebuild(float ClockSpeed = -1.f);
 
     /** 当前实际生效的 settings.json 路径（找不到返回空串） */
     FString GetSettingsFilePath() const;
@@ -97,11 +99,27 @@ public:
     /** 值字符串类型探测（面板"新增参数"用）：0 布尔 / 1 数值 / 2 字符串 */
     static int32 DetectValueType(const FString& Value);
 
+    /**
+     * 展开/收起环境配置面板（O 键，USimConfigWidget：天气/风/FOV/时间/暂停/时钟速度）。
+     */
+    UFUNCTION()
+    void TogglePanel();
+
+    /**
+     * 展开 settings.json 配置面板（机型菜单内各条目"设置"按钮走此入口）。
+     * PreferEntryName 非空时面板自动选中同名条目（该机型对应的载具配置）；未命中保持当前选中。
+     */
+    void OpenSettingsPanel(const FString& PreferEntryName = TEXT(""));
+
+    /** 收起 settings.json 配置面板（机型菜单关闭时联动调用，面板仅随菜单存在） */
+    void CloseSettingsPanel();
+
 private:
     void CreateWidgetInternal();
     void BindOpenKey();
+    /** O 键绑定入口（BindKey 要求无参函数）：无参切换配置面板 */
     UFUNCTION()
-    void TogglePanel();
+    void TogglePanelFromKey();
 
     /** 解析当前 settings.json 为 UE JSON 根对象，失败返回空并填 OutError */
     TSharedPtr<FJsonObject> LoadSettingsRoot(FString* OutError = nullptr) const;
@@ -112,6 +130,10 @@ private:
 
     UPROPERTY()
     TObjectPtr<USimConfigWidget> PanelWidget = nullptr;
+
+    /** settings.json 专用配置面板（机型条目"设置"按钮呼出，屏幕居中） */
+    UPROPERTY()
+    TObjectPtr<USimSettingsWidget> SettingsWidget = nullptr;
 
     FTimerHandle CreateWidgetTimer;
     FTimerHandle BindRetryTimer;

@@ -57,9 +57,17 @@ class BEIMINGSIM_API UDroneSwitchWidget : public UUserWidget
 
 public:
     DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnDroneModelPicked, int32, Index);
+    DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnSettingsRequested, int32, ModelIndex);
+    DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnMenuToggled, bool, bOpen);
 
     /** 点击某个机型按钮时广播（参数为按钮下标） */
     FOnDroneModelPicked OnModelPicked;
+
+    /** 点击某机型条目行尾"设置"按钮时广播（参数为机型下标） */
+    FOnSettingsRequested OnSettingsRequested;
+
+    /** 菜单展开/收起时广播（收起时用于联动关闭 settings.json 配置面板） */
+    FOnMenuToggled OnMenuToggled;
 
     /** 用机型名构建按钮列表，需在 AddToViewport 之前调用；缩略图可稍后用 SetEntryThumbnail 补充 */
     void BuildMenu(const TArray<FString>& InModelNames);
@@ -99,6 +107,15 @@ protected:
     UFUNCTION() void OnHover6();
     UFUNCTION() void OnHover7();
     UFUNCTION() void OnEntryUnhover();
+    // 行尾"设置"按钮：同样受动态委托无参限制，按机型下标用固定槽位分发
+    UFUNCTION() void OnSettings0();
+    UFUNCTION() void OnSettings1();
+    UFUNCTION() void OnSettings2();
+    UFUNCTION() void OnSettings3();
+    UFUNCTION() void OnSettings4();
+    UFUNCTION() void OnSettings5();
+    UFUNCTION() void OnSettings6();
+    UFUNCTION() void OnSettings7();
 
 private:
     UTextBlock* MakeLabel(const FString& Text, int32 FontSize, FLinearColor Color) const;
@@ -112,6 +129,8 @@ private:
     void ShowTooltip(int32 Index);
     /** 隐藏悬停预览弹窗 */
     void HideTooltip();
+    /** 统一的设置入口：广播机型下标 */
+    void RequestSettings(int32 Index);
 
     UPROPERTY()
     UCanvasPanel* RootCanvas = nullptr;

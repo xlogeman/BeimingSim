@@ -139,6 +139,32 @@ UButton* UDroneSwitchWidget::MakeEntryButton(int32 Index)
     LabelSlot->SetVerticalAlignment(VAlign_Center);
     LabelSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 
+    // 行尾"设置"按钮：打开该机型的仿真配置面板（嵌套按钮，点击不会触发外层条目选中）
+    UButton* SettingsBtn = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(),
+        *FString::Printf(TEXT("Settings%d"), Index));
+    FButtonStyle SettingsStyle = FCoreStyle::Get().GetWidgetStyle<FButtonStyle>("Button");
+    SettingsStyle.Normal = FSlateRoundedBoxBrush(EntryBg, EntryRadius);
+    SettingsStyle.Hovered = FSlateRoundedBoxBrush(EntryHoverBg, EntryRadius);
+    SettingsStyle.Pressed = FSlateRoundedBoxBrush(EntryPressBg, EntryRadius);
+    SettingsStyle.SetNormalPadding(FMargin(10.f, 4.f));
+    SettingsStyle.SetPressedPadding(FMargin(10.f, 4.f));
+    SettingsBtn->SetStyle(SettingsStyle);
+    UTextBlock* SettingsLabel = MakeLabel(TEXT("设置"), 12, ParamLabelColor);
+    SettingsBtn->AddChild(SettingsLabel);
+    switch (Index)
+    {
+    case 0: SettingsBtn->OnClicked.AddDynamic(this, &UDroneSwitchWidget::OnSettings0); break;
+    case 1: SettingsBtn->OnClicked.AddDynamic(this, &UDroneSwitchWidget::OnSettings1); break;
+    case 2: SettingsBtn->OnClicked.AddDynamic(this, &UDroneSwitchWidget::OnSettings2); break;
+    case 3: SettingsBtn->OnClicked.AddDynamic(this, &UDroneSwitchWidget::OnSettings3); break;
+    case 4: SettingsBtn->OnClicked.AddDynamic(this, &UDroneSwitchWidget::OnSettings4); break;
+    case 5: SettingsBtn->OnClicked.AddDynamic(this, &UDroneSwitchWidget::OnSettings5); break;
+    case 6: SettingsBtn->OnClicked.AddDynamic(this, &UDroneSwitchWidget::OnSettings6); break;
+    case 7: SettingsBtn->OnClicked.AddDynamic(this, &UDroneSwitchWidget::OnSettings7); break;
+    default: break;
+    }
+    Row->AddChildToHorizontalBox(SettingsBtn)->SetVerticalAlignment(VAlign_Center);
+
     Btn->AddChild(Row);
     // 显式固定按钮内容槽位：内边距为 0、填满按钮，消除默认值带来的行间差异
     if (UButtonSlot* BtnContentSlot = Cast<UButtonSlot>(Row->Slot))
@@ -369,6 +395,8 @@ void UDroneSwitchWidget::ToggleMenu()
     bOpen = !bOpen;
     // 右侧面板：展开时贴右缘留 16px 边距，收起时滑出屏幕右侧
     TargetX = bOpen ? -16.f : PanelWidth + 60.f;
+    // 广播开合状态（收起时外部联动关闭 settings.json 配置面板）
+    OnMenuToggled.Broadcast(bOpen);
 }
 
 void UDroneSwitchWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
@@ -414,6 +442,20 @@ void UDroneSwitchWidget::OnEntryUnhover()
 {
     HideTooltip();
 }
+
+void UDroneSwitchWidget::RequestSettings(int32 Index)
+{
+    OnSettingsRequested.Broadcast(Index);
+}
+
+void UDroneSwitchWidget::OnSettings0() { RequestSettings(0); }
+void UDroneSwitchWidget::OnSettings1() { RequestSettings(1); }
+void UDroneSwitchWidget::OnSettings2() { RequestSettings(2); }
+void UDroneSwitchWidget::OnSettings3() { RequestSettings(3); }
+void UDroneSwitchWidget::OnSettings4() { RequestSettings(4); }
+void UDroneSwitchWidget::OnSettings5() { RequestSettings(5); }
+void UDroneSwitchWidget::OnSettings6() { RequestSettings(6); }
+void UDroneSwitchWidget::OnSettings7() { RequestSettings(7); }
 
 UTextBlock* UDroneSwitchWidget::MakeLabel(const FString& Text, int32 FontSize, FLinearColor Color) const
 {

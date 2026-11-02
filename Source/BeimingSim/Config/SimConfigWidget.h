@@ -10,23 +10,20 @@ class ASimConfigManager;
 class UBorder;
 class UButton;
 class UCheckBox;
-class UComboBoxString;
 class UCanvasPanel;
 class UCanvasPanelSlot;
-class UEditableTextBox;
-class UScrollBox;
 class USlider;
 class UTextBlock;
 class UVerticalBox;
 
 /**
- * 仿真配置面板（纯 C++ 构建 UMG，无需 WBP 资产，样式与 DroneSwitchWidget 一致）。
- * 按 O 从屏幕右侧滑出，分组编辑 AirSim 运行参数，仅两个操作按钮：
+ * 仿真环境配置面板（纯 C++ 构建 UMG，无需 WBP 资产，样式与 DroneSwitchWidget 一致）。
+ * 按 O 从屏幕右侧滑出，分组编辑 AirSim 运行环境参数，仅两个操作按钮：
  *
  * - 【应用（即时生效）】天气（雨/雪/尘/雾）、风（NED m/s）、相机 FOV、暂停：
- *   调用 AirSim 运行时 API（UWeatherLib / ASimModeBase setter），不重建 SimMode；
- * - 【保存并重建】当前 settings 条目参数 + 时钟速度一次写入 settings.json
- *   （自动备份 .bak）→ 销毁并重建 SimMode 后生效。
+ *   调用 AirSim 运行时 API（UWeatherLib / ASimModeBase setter），不重建 SimMode、
+ *   不写 settings.json。
+ * settings.json 的对象级编辑在独立面板 SimSettingsWidget（机型菜单内各条目的设置按钮呼出）。
  */
 UCLASS()
 class BEIMINGSIM_API USimConfigWidget : public UUserWidget
@@ -55,23 +52,16 @@ protected:
     UFUNCTION() void OnSlider5(float Value);
     UFUNCTION() void OnSlider6(float Value);
     UFUNCTION() void OnSlider7(float Value);
-    UFUNCTION() void OnSlider8(float Value);
 
     UFUNCTION() void OnWeatherEnabledChanged(bool bChecked);
     UFUNCTION() void OnPauseChanged(bool bChecked);
     UFUNCTION() void OnApplyLive();
-    // 合并保存：当前条目参数 + 时钟速度一次写入并重建 SimMode
-    UFUNCTION() void OnSaveRebuild();
 
     UFUNCTION() void OnTimeMorning();
     UFUNCTION() void OnTimeNoon();
     UFUNCTION() void OnTimeEvening();
     UFUNCTION() void OnTimeNight();
     UFUNCTION() void OnTimeDisable();
-
-    // ---- settings 对象编辑区（通道 B：写回 settings.json → 重建 SimMode 生效）----
-    UFUNCTION() void OnEntrySelected(FString SelectedItem, ESelectInfo::Type SelectionType);
-    UFUNCTION() void OnEntryParamAdd();
 
 private:
     /** 滑条在 Sliders/ValueLabels 数组中的固定下标 */
@@ -85,7 +75,6 @@ private:
         WindY,
         WindZ,
         CameraFov,
-        ClockSpeed,
         SliderCount
     };
 
@@ -95,10 +84,6 @@ private:
         float Min, float Max, float Value);
     UButton* MakeButton(const FString& Text, bool bPrimary = false);
     void AddSectionHeader(UVerticalBox* Parent, const FString& Title);
-    /** 构建"settings 对象"区：下拉框 + 参数键值行 + 新增参数行 + 保存重建按钮 */
-    void AddEntrySection(UVerticalBox* Content);
-    /** 按当前选中条目重建参数键值行；bFetchFromManager=false 时保留内存中的 SensorParams（新增参数后重建行用） */
-    void RebuildSensorRows(bool bFetchFromManager = true);
     void OnSliderChanged(ESliderIndex Index, float Value);
     void UpdateValueLabel(ESliderIndex Index);
     void SetStatusText(const FString& Text);
@@ -123,36 +108,6 @@ private:
 
     UPROPERTY()
     TObjectPtr<UTextBlock> StatusLabel = nullptr;
-
-    // ---- settings 对象编辑区 ----
-    UPROPERTY()
-    TObjectPtr<UComboBoxString> EntryCombo = nullptr;
-
-    UPROPERTY()
-    TObjectPtr<UVerticalBox> SensorRowsBox = nullptr;
-
-    UPROPERTY()
-    TArray<TObjectPtr<UCheckBox>> SensorChecks;
-
-    UPROPERTY()
-    TArray<TObjectPtr<UEditableTextBox>> SensorTexts;
-
-    UPROPERTY()
-    TObjectPtr<UEditableTextBox> NewParamKeyBox = nullptr;
-
-    UPROPERTY()
-    TObjectPtr<UEditableTextBox> NewParamValueBox = nullptr;
-
-    UPROPERTY()
-    TArray<TObjectPtr<UWidget>> SensorRowWidgets;
-
-    /** 当前条目的参数列表（与键值行一一对应） */
-    TArray<FSimSensorParam> SensorParams;
-    /** 与键值行一一对应的行类型（0 布尔 / 1 数值 / 2 字符串 / 3 只读） */
-    TArray<int32> SensorRowTypes;
-    /** 候选条目列表（与下拉框选项一一对应） */
-    TArray<FSimSettingsEntry> EntryRefs;
-    FSimSettingsEntry CurrentEntryRef;
 
     TWeakObjectPtr<ASimConfigManager> Manager;
 

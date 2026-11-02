@@ -1,5 +1,6 @@
 #include "SimConfigManager.h"
 #include "SimConfigWidget.h"
+#include "SimSettingsWidget.h"
 #include "EngineUtils.h"
 #include "Engine/World.h"
 #include "HAL/PlatformFileManager.h"
@@ -53,11 +54,25 @@ void ASimConfigManager::CreateWidgetInternal()
     }
     if (!PanelWidget)
     {
-        UE_LOG(LogTemp, Warning, TEXT("SimConfig: 配置面板创建失败"));
+        UE_LOG(LogTemp, Warning, TEXT("SimConfig: 环境配置面板创建失败"));
+    }
+    else
+    {
+        PanelWidget->BuildPanel(this);
+        PanelWidget->AddToViewport(101);
+    }
+
+    if (!SettingsWidget)
+    {
+        SettingsWidget = CreateWidget<USimSettingsWidget>(GetWorld(), USimSettingsWidget::StaticClass());
+    }
+    if (!SettingsWidget)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("SimConfig: settings 配置面板创建失败"));
         return;
     }
-    PanelWidget->BuildPanel(this);
-    PanelWidget->AddToViewport(101);
+    SettingsWidget->BuildPanel(this);
+    SettingsWidget->AddToViewport(102);
 }
 
 void ASimConfigManager::BindOpenKey()
@@ -65,7 +80,7 @@ void ASimConfigManager::BindOpenKey()
     APlayerController* PC = GetWorld()->GetFirstPlayerController();
     if (PC && PC->InputComponent)
     {
-        PC->InputComponent->BindKey(EKeys::O, IE_Pressed, this, &ASimConfigManager::TogglePanel);
+        PC->InputComponent->BindKey(EKeys::O, IE_Pressed, this, &ASimConfigManager::TogglePanelFromKey);
     }
     else
     {
@@ -75,11 +90,39 @@ void ASimConfigManager::BindOpenKey()
     }
 }
 
+void ASimConfigManager::TogglePanelFromKey()
+{
+    TogglePanel();
+}
+
 void ASimConfigManager::TogglePanel()
 {
+    // O 键：切换环境配置面板（天气/风/FOV/时间/暂停/时钟速度）
     if (PanelWidget)
     {
         PanelWidget->TogglePanel();
+    }
+}
+
+void ASimConfigManager::OpenSettingsPanel(const FString& PreferEntryName)
+{
+    // 机型条目"设置"按钮：强制展开居中的 settings.json 面板并选中对应载具条目
+    if (SettingsWidget)
+    {
+        SettingsWidget->OpenPanel(PreferEntryName);
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("SimConfig: settings 配置面板尚未就绪"));
+    }
+}
+
+void ASimConfigManager::CloseSettingsPanel()
+{
+    // 机型菜单收起时联动收起：settings 面板仅在菜单打开期间存在
+    if (SettingsWidget)
+    {
+        SettingsWidget->ClosePanel();
     }
 }
 
@@ -165,7 +208,11 @@ bool ASimConfigManager::ApplyAndRebuild(float ClockSpeed)
 
     // 把结构化修改写进 Settings 单例再落盘（Settings::saveJSonFile 会序列化整个文档）
     msr::airlib::Settings& SettingsJson = msr::airlib::Settings::singleton();
-    SettingsJson.setDouble("ClockSpeed", static_cast<double>(ClockSpeed));
+    // ClockSpeed < 0 表示本次不修改时钟速度（面板已移除时钟滑条，保持 json 原值）
+    if (ClockSpeed >= 0.f)
+    {
+        SettingsJson.setDouble("ClockSpeed", static_cast<double>(ClockSpeed));
+    }
 
     // 固化 SimMode 类型，避免重载时弹出"选择载具"对话框
     std::string SimModeName = msr::airlib::AirSimSettings::singleton().simmode_name;
@@ -173,7 +220,7 @@ bool ASimConfigManager::ApplyAndRebuild(float ClockSpeed)
 
     SettingsJson.saveJSonFile(TCHAR_TO_UTF8(*JsonPath));
     UE_LOG(LogTemp, Log, TEXT("SimConfig: settings.json 已写回 %s（备份 %s，ClockSpeed=%.2f）"),
-        *JsonPath, *BackupPath, ClockSpeed);
+        *JsonPath, *BackupPath, ClockSpeed >= 0.f ? ClockSpeed : 0.f);
 
     // 原地销毁重建 SimMode（延迟一帧，见 ASimHUD::RecreateSimMode）
     for (TActorIterator<ASimHUD> It(GetWorld()); It; ++It)

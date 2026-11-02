@@ -75,6 +75,17 @@ private:
     UFUNCTION()
     void ApplyModel(int32 Index);
 
+    /**
+     * 某机型条目行尾"设置"按钮：收起机型菜单并唤出居中的仿真配置面板，
+     * 面板自动选中该机型对应的载具 settings 条目（按菜单显示名匹配）
+     */
+    UFUNCTION()
+    void OpenSettingsPanel(int32 ModelIndex);
+
+    /** 菜单收起时联动关闭 settings.json 配置面板（面板仅随菜单存在） */
+    UFUNCTION()
+    void OnMenuToggled(bool bOpen);
+
     UPROPERTY()
     UDroneSwitchWidget* MenuWidget = nullptr;
 

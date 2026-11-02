@@ -18,6 +18,8 @@
 #include "Vehicles/Multirotor/FlyingPawn.h"
 // AirSim SimMode：提供 reset() 整体重置（回到初始位姿 + 飞控/物理重置）
 #include "SimMode/SimModeBase.h"
+// 仿真配置管理器：菜单内"仿真设置"按钮唤出其居中配置面板
+#include "Config/SimConfigManager.h"
 
 ADroneModelSwitcher::ADroneModelSwitcher()
 {
@@ -254,6 +256,8 @@ void ADroneModelSwitcher::CreateWidgetInternal()
 
     MenuWidget->BuildMenu(DisplayNames);
     MenuWidget->OnModelPicked.AddDynamic(this, &ADroneModelSwitcher::ApplyModel);
+    MenuWidget->OnSettingsRequested.AddDynamic(this, &ADroneModelSwitcher::OpenSettingsPanel);
+    MenuWidget->OnMenuToggled.AddDynamic(this, &ADroneModelSwitcher::OnMenuToggled);
     // 填充各机型的介绍与参数（悬停弹窗内容），未配置的机型由控件内部兜底
     for (int32 i = 0; i < DisplayNames.Num(); ++i)
     {
@@ -366,6 +370,37 @@ int32 ADroneModelSwitcher::GetCurrentModelIndex() const
         }
     }
     return -1;
+}
+
+void ADroneModelSwitcher::OpenSettingsPanel(int32 ModelIndex)
+{
+    // 收起机型菜单，再唤出居中的仿真配置面板，并尝试选中该机型对应的载具配置条目
+    // （配置面板由 SimConfigManager 在 BeginPlay 创建，GameMode 同一批生成，必然已就绪）
+    if (MenuWidget && MenuWidget->IsInViewport())
+    {
+        MenuWidget->ToggleMenu();
+    }
+    const FString PreferEntryName = DisplayNames.IsValidIndex(ModelIndex)
+        ? DisplayNames[ModelIndex] : FString();
+    for (TActorIterator<ASimConfigManager> It(GetWorld()); It; ++It)
+    {
+        It->OpenSettingsPanel(PreferEntryName);
+        return;
+    }
+    UE_LOG(LogTemp, Warning, TEXT("DroneSwitcher: 未找到 SimConfigManager，无法打开仿真配置面板"));
+}
+
+void ADroneModelSwitcher::OnMenuToggled(bool bOpen)
+{
+    // 菜单收起（Tab 关闭或点击机型后自动收起）时，联动关闭居中的 settings 配置面板
+    if (!bOpen)
+    {
+        for (TActorIterator<ASimConfigManager> It(GetWorld()); It; ++It)
+        {
+            It->CloseSettingsPanel();
+            return;
+        }
+    }
 }
 
 void ADroneModelSwitcher::ApplyModel(int32 Index)
