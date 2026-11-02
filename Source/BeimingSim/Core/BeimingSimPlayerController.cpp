@@ -69,9 +69,7 @@ void ABeimingSimPlayerController::ToggleFreeFlyCamera()
         SetViewTarget(FreeFlyPawn);
         SetControlRotation(SpawnRot);
 
-        // 自由视角空闲态：光标可见、仅右键可触发捕获（见 ApplyFreeFlyIdleInputMode）。
-        // 按住右键期间由 AFreeFlyCameraPawn::SetLookActive 切到 GameOnly 模式
-        // （高精度原始输入 + 光标锁定，位移不受屏幕边界限制），松开右键切回空闲态。
+        // 空闲态：光标可见、仅右键按下时捕获；按住右键期间由 SetLookActive 切 GameOnly。
         ApplyFreeFlyIdleInputMode();
 
         bFreeFlyActive = true;
@@ -115,9 +113,7 @@ void ABeimingSimPlayerController::ToggleFreeFlyCamera()
         bFreeFlyActive = false;
         bSavedDirectorModeValid = false;
 
-        // 恢复项目默认输入行为：无捕获、光标可见。
-        // GameAndUI 的 ApplyInputMode 内部会 ReleaseMouseCapture 并把锁定行为
-        // 设为 DoNotLock，从而解除自由视角遗留的高精度/锁定状态。
+        // GameAndUI 解除自由视角遗留的高精度/锁定状态，恢复光标可见。
         SetInputMode(FInputModeGameAndUI());
         bShowMouseCursor = true;
         if (UGameViewportClient* GameViewport = GetWorld()->GetGameViewport())
@@ -145,14 +141,9 @@ void ABeimingSimPlayerController::RestoreCameraDirectorView(AAirSimCameraDirecto
 
 void ABeimingSimPlayerController::ApplyFreeFlyIdleInputMode()
 {
-    // 自由视角空闲态的输入模式：
-    // 1. GameAndUI：解除 GameOnly 遗留的高精度鼠标/光标锁定/永久捕获
-    //    （ApplyInputMode 内部 ReleaseMouseCapture、锁定行为 DoNotLock），光标恢复显示；
-    // 2. 捕获模式改为"仅右键按下时捕获"：不能保持 NoCapture——引擎在无捕获且
-    //    捕获模式不匹配时不会把鼠标按键事件下发给游戏输入
-    //    （见 FSceneViewport::OnMouseButtonDown 的 bTemporaryCapture/bProcessInputPrimary），
-    //    右键按下就永远到不了 Pawn 的 BindKey 回调。
-    // 按住右键后由 SetLookActive(true) 切到 GameOnly（高精度+锁定，位移无边界）。
+    // GameAndUI 清除 GameOnly 遗留的高精度/锁定/捕获状态并显示光标；
+    // 不能用 NoCapture——无捕获时引擎不把鼠标按下事件下发给游戏输入，
+    // 右键就永远触发不了 Pawn 的 BindKey 回调，故改为"仅右键按下时捕获"。
     SetInputMode(FInputModeGameAndUI());
     bShowMouseCursor = true;
     if (UGameViewportClient* GameViewport = GetWorld()->GetGameViewport())

@@ -162,16 +162,9 @@ void AFreeFlyCameraPawn::SetLookActive(bool bActive)
         bSkipNextLookDelta = true;
     }
 
-    // 编辑器风格：按住右键期间切换输入模式。
-    // 按下：GameOnly（UseHighPrecisionMouseMovement + LockMouseToWidget +
-    // CapturePermanently，见 FInputModeGameOnly::ApplyInputMode）——
-    // 光标隐藏锁定，位移为原始输入，不受屏幕边界限制。
-    // 这些操作写入 LocalPlayer 待处理 Slate 队列，由主循环每帧通过
-    // ProcessExternalReply 应用，不依赖输入事件，同一帧内即可生效。
-    // 松开：切回空闲态（光标可见、仅右键可触发捕获）。
-    // 注意：不要在这里自己设置 bShowMouseCursor——按下时光标可见才能让
-    // 引擎的点击捕获启用光标锁定（bCursorHiddenDueToCapture），光标的
-    // 隐藏/恢复由引擎捕获机制与 GameOnly 锁定共同完成。
+    // 按住右键期间切 GameOnly（高精度原始输入 + 光标锁定，位移不受屏幕边界限制），
+    // 松开切回空闲态。注意不要自行设置 bShowMouseCursor：按下时光标可见才能让
+    // 引擎的点击捕获机制正确隐藏/恢复光标。
     APlayerController* PC = Cast<APlayerController>(GetController());
     if (!PC)
     {

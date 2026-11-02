@@ -76,16 +76,14 @@ void ADroneModelSwitcher::DiscoverModels()
     }
 
 #if WITH_EDITOR
-    // 编辑器下确保扫描目录已入注册表（启动早期可能还没异步扫到）
-    // 注意：打包版绝不能调用（尤其带 ForceRescan）——打包资产在 pak 里、磁盘上不存在，
-    // ForceRescan 会把预置注册表中该路径的资产条目按"磁盘已删除"清空，
-    // 导致后续 GetAssets 查不到任何机型（AssetRegistry.cpp: OldAssetsToRemove）
+    // 编辑器下确保扫描目录已入注册表（启动早期可能还没异步扫到）。
+    // 打包版绝不能调用（尤其带 ForceRescan）：打包资产在 pak 里、磁盘上不存在，
+    // 会把该路径的注册表条目按"磁盘已删除"清空，导致查不到任何机型
     Registry->ScanPathsSynchronous({ ScanPath }, true);
 #endif
 
-    // 查询扫描目录下的全部资产（不按类过滤，也不依赖类派生数据——
-    // 打包版注册表中不保证有派生关系数据，按目录扫描最稳妥），
-    // 随后在循环里按"蓝图/生成的类"特征预筛并加载验证是否 AFlyingPawn 子类
+    // 按目录扫描全部资产（打包版注册表不保证有类派生数据，不做类过滤），
+    // 循环里按"蓝图/生成的类"特征预筛后加载验证
     FARFilter Filter;
     Filter.PackagePaths.Add(FName(*ScanPath));
     Filter.bRecursivePaths = true;
@@ -124,8 +122,7 @@ void ADroneModelSwitcher::DiscoverModels()
             ClassPath += TEXT("_C");
         }
 
-        // 同步加载验证：确为 AFlyingPawn 子类才收入菜单（加载失败/类型不符则跳过）
-        // 注意用花括号初始化：圆括号会被 MSVC 解析成函数声明（most vexing parse）
+        // 同步加载验证：确为 AFlyingPawn 子类才收入菜单（花括号初始化避免 most vexing parse）
         TSoftClassPtr<AFlyingPawn> ClassRef{FSoftObjectPath(ClassPath)};
         UClass* LoadedClass = ClassRef.LoadSynchronous();
         if (!LoadedClass || !LoadedClass->IsChildOf(AFlyingPawn::StaticClass()))

@@ -1,5 +1,6 @@
 #include "SimSettingsWidget.h"
 #include "SimConfigManager.h"
+#include "Config/SimPanelStyle.h"
 #include "Brushes/SlateRoundedBoxBrush.h"
 #include "Components/Border.h"
 #include "Components/Button.h"
@@ -20,21 +21,12 @@
 #include "Styling/CoreStyle.h"
 #include "Blueprint/WidgetTree.h"
 
+using namespace SimPanelStyle;
+
 namespace
 {
-    // 与 DroneSwitchWidget 保持一致的配色
-    const FLinearColor PanelBg(0.04f, 0.05f, 0.09f, 0.94f);
-    const FLinearColor Accent(0.15f, 0.62f, 0.95f, 1.f);
-    const FLinearColor AccentHover(0.24f, 0.72f, 1.f, 1.f);
-    const FLinearColor AccentPress(0.10f, 0.48f, 0.78f, 1.f);
-    const FLinearColor ParamLabelColor(0.62f, 0.68f, 0.76f, 1.f);
-    const FLinearColor NoteColor(0.55f, 0.60f, 0.68f, 1.f);
     const FLinearColor InputBg(0.09f, 0.11f, 0.17f, 1.f);
     const FLinearColor InputFocusBg(0.07f, 0.09f, 0.14f, 1.f);
-    const FLinearColor BtnBg(0.13f, 0.16f, 0.24f, 1.f);
-    const FLinearColor BtnHoverBg(0.19f, 0.24f, 0.35f, 1.f);
-    const FLinearColor BtnPressBg(0.10f, 0.12f, 0.19f, 1.f);
-    constexpr float PanelRadius = 12.f;
     constexpr float ScrollHeight = 600.f;
     /** 数值参数输入框宽度：数值通常只有几位数字，固定窄宽度避免拉满整行 */
     constexpr float NumericInputWidth = 160.f;
@@ -56,57 +48,6 @@ namespace
             Width += (static_cast<uint32>(C) > 127) ? KeyCharWidthWide : KeyCharWidthAscii;
         }
         return Width;
-    }
-
-    /** 圆角矩形刷子（可指定尺寸，用于需要固定大小的场合） */
-    FSlateRoundedBoxBrush MakeRoundBrush(const FLinearColor& Color, float Radius, FVector2D Size = FVector2D::ZeroVector)
-    {
-        FSlateRoundedBoxBrush Brush(Color, Radius);
-        if (Size != FVector2D::ZeroVector)
-        {
-            Brush.ImageSize = Size;
-        }
-        return Brush;
-    }
-
-    /** 带描边的圆角矩形刷子 */
-    FSlateRoundedBoxBrush MakeRoundBrush(const FLinearColor& Color, float Radius,
-        const FLinearColor& OutlineColor, float OutlineWidth, FVector2D Size = FVector2D::ZeroVector)
-    {
-        FSlateRoundedBoxBrush Brush(Color, Radius, OutlineColor, OutlineWidth);
-        if (Size != FVector2D::ZeroVector)
-        {
-            Brush.ImageSize = Size;
-        }
-        return Brush;
-    }
-
-    FButtonStyle MakeButtonStyle(bool bPrimary)
-    {
-        const FLinearColor Normal = bPrimary ? Accent : BtnBg;
-        const FLinearColor Hover = bPrimary ? AccentHover : BtnHoverBg;
-        const FLinearColor Pressed = bPrimary ? AccentPress : BtnPressBg;
-        FButtonStyle Style;
-        Style.SetNormal(MakeRoundBrush(Normal, 6.f));
-        Style.SetHovered(MakeRoundBrush(Hover, 6.f));
-        Style.SetPressed(MakeRoundBrush(Pressed, 6.f));
-        Style.SetNormalPadding(FMargin(12, 4));
-        Style.SetPressedPadding(FMargin(12, 4));
-        return Style;
-    }
-
-    FCheckBoxStyle MakeCheckBoxStyle()
-    {
-        FCheckBoxStyle Style = FCoreStyle::Get().GetWidgetStyle<FCheckBoxStyle>("CheckBox");
-        const FVector2D Size(18.f, 18.f);
-        const FLinearColor TrackBg(0.24f, 0.27f, 0.34f, 1.f);
-        Style.SetUncheckedImage(MakeRoundBrush(TrackBg, 4.f, Size));
-        Style.SetUncheckedHoveredImage(MakeRoundBrush(FLinearColor(0.30f, 0.34f, 0.42f, 1.f), 4.f, Size));
-        Style.SetUncheckedPressedImage(MakeRoundBrush(TrackBg, 4.f, Size));
-        Style.SetCheckedImage(MakeRoundBrush(Accent, 4.f, Size));
-        Style.SetCheckedHoveredImage(MakeRoundBrush(AccentHover, 4.f, Size));
-        Style.SetCheckedPressedImage(MakeRoundBrush(AccentPress, 4.f, Size));
-        return Style;
     }
 
     FEditableTextBoxStyle MakeTextBoxStyle()
@@ -537,48 +478,17 @@ void USimSettingsWidget::OnSaveRebuild()
 
 UTextBlock* USimSettingsWidget::MakeLabel(const FString& Text, int32 FontSize, FLinearColor Color, bool bBold) const
 {
-    UTextBlock* Label = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass());
-    Label->SetText(FText::FromString(Text));
-    Label->SetColorAndOpacity(FSlateColor(Color));
-    Label->SetFont(FCoreStyle::GetDefaultFontStyle(bBold ? "Bold" : "Regular", FontSize));
-    return Label;
+    return SimPanelStyle::MakeLabel(WidgetTree, Text, FontSize, Color, bBold);
 }
 
 UButton* USimSettingsWidget::MakeButton(const FString& Text, bool bPrimary)
 {
-    UButton* Btn = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass());
-    Btn->SetStyle(MakeButtonStyle(bPrimary));
-    UTextBlock* Label = MakeLabel(Text, 13, FLinearColor::White, bPrimary);
-    Btn->AddChild(Label);
-    if (UButtonSlot* ContentSlot = Cast<UButtonSlot>(Btn->GetContent()->Slot))
-    {
-        ContentSlot->SetPadding(FMargin(0.f));
-        ContentSlot->SetHorizontalAlignment(HAlign_Fill);
-        ContentSlot->SetVerticalAlignment(VAlign_Fill);
-    }
-    return Btn;
+    return SimPanelStyle::MakeButton(WidgetTree, Text, bPrimary);
 }
 
 void USimSettingsWidget::AddSectionHeader(UVerticalBox* Parent, const FString& Title)
 {
-    UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
-
-    // 强调色竖条
-    USizeBox* BarBox = WidgetTree->ConstructWidget<USizeBox>();
-    BarBox->SetWidthOverride(4.f);
-    BarBox->SetHeightOverride(18.f);
-    UBorder* Bar = WidgetTree->ConstructWidget<UBorder>();
-    Bar->SetBrush(FSlateRoundedBoxBrush(Accent, 2.f));
-    BarBox->SetContent(Bar);
-    UHorizontalBoxSlot* BarSlot = Row->AddChildToHorizontalBox(BarBox);
-    BarSlot->SetVerticalAlignment(VAlign_Center);
-    BarSlot->SetPadding(FMargin(4, 0, 8, 0));
-
-    UTextBlock* Label = MakeLabel(Title, 15, FLinearColor::White, true);
-    UHorizontalBoxSlot* LabelSlot = Row->AddChildToHorizontalBox(Label);
-    LabelSlot->SetVerticalAlignment(VAlign_Center);
-
-    Parent->AddChildToVerticalBox(Row)->SetPadding(FMargin(0, 10, 0, 6));
+    SimPanelStyle::AddSectionHeader(WidgetTree, Parent, Title);
 }
 
 void USimSettingsWidget::SetStatusText(const FString& Text)

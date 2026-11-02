@@ -255,25 +255,6 @@ TSharedPtr<FJsonObject> ASimConfigManager::LoadSettingsRoot(FString* OutError) c
     return Root;
 }
 
-FString ASimConfigManager::SensorTypeToName(int32 SensorType)
-{
-    switch (SensorType)
-    {
-    case 1:  return TEXT("气压计");
-    case 2:  return TEXT("IMU");
-    case 3:  return TEXT("GPS");
-    case 4:  return TEXT("磁力计");
-    case 5:  return TEXT("距离");
-    case 6:  return TEXT("Lidar");
-    case 7:  return TEXT("Echo");
-    case 8:  return TEXT("GPULidar");
-    case 9:  return TEXT("模板");
-    case 10: return TEXT("UWB");
-    case 11: return TEXT("WiFi");
-    default: return TEXT("未知类型");
-    }
-}
-
 namespace
 {
     // 将 json 值解析为对象（无效返回空）

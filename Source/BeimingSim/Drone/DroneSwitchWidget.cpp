@@ -1,4 +1,5 @@
 #include "DroneSwitchWidget.h"
+#include "Config/SimPanelStyle.h"
 #include "Brushes/SlateRoundedBoxBrush.h"
 #include "Components/Border.h"
 #include "Components/Button.h"
@@ -18,24 +19,22 @@
 #include "Styling/CoreStyle.h"
 #include "Blueprint/WidgetTree.h"
 
+using namespace SimPanelStyle;
+
 namespace
 {
-    // 配色
-    const FLinearColor PanelBg(0.04f, 0.05f, 0.09f, 0.94f);
+    // 本面板专属配色（共享配色见 Config/SimPanelStyle.h）
     const FLinearColor EntryBg(0.10f, 0.12f, 0.18f, 0.75f);
     const FLinearColor EntryHoverBg(0.16f, 0.21f, 0.31f, 0.90f);
     const FLinearColor EntryPressBg(0.21f, 0.28f, 0.41f, 0.95f);
     // 与快照 RT 的 ClearColor 完全一致且不透明，避免方块内出现深浅不一的边界
     const FLinearColor ThumbBg(0.02f, 0.03f, 0.06f, 1.f);
-    const FLinearColor Accent(0.15f, 0.62f, 0.95f, 1.f);
     const FLinearColor TooltipBg(0.05f, 0.06f, 0.11f, 0.97f);
-    const FLinearColor ParamLabelColor(0.62f, 0.68f, 0.76f, 1.f);
     // 齿轮（设置）按钮专属配色：比条目卡片底色更深一档 + 细描边，与卡片明显区分
     const FLinearColor GearBtnBg(0.02f, 0.03f, 0.06f, 0.95f);
     const FLinearColor GearBtnHoverBg(0.09f, 0.12f, 0.20f, 0.95f);
     const FLinearColor GearBtnPressBg(0.01f, 0.02f, 0.04f, 0.95f);
     const FLinearColor GearBtnOutline(0.28f, 0.34f, 0.46f, 0.60f);
-    constexpr float PanelRadius = 12.f;
     constexpr float EntryRadius = 8.f;
     constexpr float TooltipRadius = 10.f;
     constexpr int32 MaxEntries = 8;
@@ -562,11 +561,8 @@ void UDroneSwitchWidget::OnSettings7() { RequestSettings(7); }
 
 UTextBlock* UDroneSwitchWidget::MakeLabel(const FString& Text, int32 FontSize, FLinearColor Color) const
 {
-    UTextBlock* Label = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass());
-    Label->SetText(FText::FromString(Text));
-    Label->SetFont(FCoreStyle::GetDefaultFontStyle("Bold", FontSize));
-    Label->SetColorAndOpacity(FSlateColor(Color));
-    return Label;
+    // 本面板所有文字均为粗体（保持既有视觉），走共享样式工厂
+    return SimPanelStyle::MakeLabel(WidgetTree, Text, FontSize, Color, /*bBold*/ true);
 }
 
 void UDroneSwitchWidget::RequestPick(int32 Index)

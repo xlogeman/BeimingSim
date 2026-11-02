@@ -129,8 +129,6 @@ private:
     TSharedPtr<FJsonObject> LoadSettingsRoot(FString* OutError = nullptr) const;
     /** 备份现有文件（.bak）→ 写入新文本 → 同步到 Settings 单例 */
     bool PersistSettingsText(const FString& NewText);
-    /** 传感器类型编号 → 显示名 */
-    static FString SensorTypeToName(int32 SensorType);
 
     UPROPERTY()
     TObjectPtr<USimConfigWidget> PanelWidget = nullptr;

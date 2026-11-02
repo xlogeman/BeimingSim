@@ -53,8 +53,6 @@ void UWeatherLib::initWeather(UWorld* World, TArray<AActor*> ActorsToAttachTo)
         // BEIMING patch: 原版在此 spawn F10 天气菜单的 MenuActor，该功能已由
         // 项目内 O 键仿真配置面板取代，不再生成
     }
-
-    //showWeatherMenu(WorldContextObject);
 }
 void UWeatherLib::setWeatherParamScalar(UWorld* World, EWeatherParamScalar Param, float Amount)
 {
