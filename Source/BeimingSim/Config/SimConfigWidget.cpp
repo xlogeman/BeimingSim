@@ -40,7 +40,9 @@ namespace
     constexpr float PanelRadius = 12.f;
     constexpr float NameWidth = 110.f;
     constexpr float ValueWidth = 52.f;
-    constexpr float ScrollHeight = 600.f;
+    constexpr float ScrollHeight = 440.f;
+    // 面板顶部距屏幕上方的固定距离（整体位置下移，不再贴顶）
+    constexpr float PanelTopY = 260.f;
 
     /** 圆角矩形刷子（可指定尺寸，用于复选框/滑条拇指等需要固定大小的场合） */
     FSlateRoundedBoxBrush MakeRoundBrush(const FLinearColor& Color, float Radius, FVector2D Size = FVector2D::ZeroVector)
@@ -105,12 +107,12 @@ void USimConfigWidget::BuildPanel(ASimConfigManager* InManager)
     Panel->SetPadding(FMargin(14.f, 12.f));
     Panel->SetHorizontalAlignment(HAlign_Fill);
 
-    // 锚定屏幕右上角，以面板右上点为轴定位（滑出方向为屏幕右侧）
+    // 锚定屏幕左上角，以面板左上点为轴定位（滑出方向为屏幕左侧，垂直位置整体下移）
     PanelSlot = RootCanvas->AddChildToCanvas(Panel);
-    PanelSlot->SetAnchors(FAnchors(1.f, 0.05f));
-    PanelSlot->SetAlignment(FVector2D(1.f, 0.f));
+    PanelSlot->SetAnchors(FAnchors(0.f, 0.f));
+    PanelSlot->SetAlignment(FVector2D(0.f, 0.f));
     PanelSlot->SetAutoSize(true);
-    PanelSlot->SetPosition(FVector2D(CurrentX, 60.f));
+    PanelSlot->SetPosition(FVector2D(CurrentX, PanelTopY));
     PanelSlot->SetZOrder(60);
 
     UVerticalBox* Box = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("Box"));
@@ -144,19 +146,6 @@ void USimConfigWidget::BuildPanel(ASimConfigManager* InManager)
     // ---- 环境天气 ----
     AddSectionHeader(Content, TEXT("环境天气"));
 
-    UHorizontalBox* WeatherRow = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("WeatherRow"));
-    UCheckBox* WeatherEnabled = WidgetTree->ConstructWidget<UCheckBox>(UCheckBox::StaticClass(), TEXT("WeatherEnabled"));
-    WeatherEnabled->SetWidgetStyle(MakeCheckBoxStyle());
-    WeatherEnabled->OnCheckStateChanged.AddDynamic(this, &USimConfigWidget::OnWeatherEnabledChanged);
-    UHorizontalBoxSlot* WeatherCheckSlot = WeatherRow->AddChildToHorizontalBox(WeatherEnabled);
-    WeatherCheckSlot->SetPadding(FMargin(4, 0, 8, 0));
-    WeatherCheckSlot->SetVerticalAlignment(VAlign_Center);
-    UHorizontalBoxSlot* WeatherLabelSlot = WeatherRow->AddChildToHorizontalBox(
-        MakeLabel(TEXT("启用天气特效"), 14, FLinearColor::White));
-    WeatherLabelSlot->SetVerticalAlignment(VAlign_Center);
-    Content->AddChildToVerticalBox(WeatherRow)->SetPadding(FMargin(0, 4));
-    WeatherCheck = WeatherEnabled;
-
     MakeSliderRow(Content, TEXT("雨量"), Rain, 0.f, 1.f, 0.f);
     MakeSliderRow(Content, TEXT("积雪"), Snow, 0.f, 1.f, 0.f);
     MakeSliderRow(Content, TEXT("沙尘"), Dust, 0.f, 1.f, 0.f);
@@ -167,10 +156,6 @@ void USimConfigWidget::BuildPanel(ASimConfigManager* InManager)
     MakeSliderRow(Content, TEXT("北向 X"), WindX, -10.f, 10.f, 0.f);
     MakeSliderRow(Content, TEXT("东向 Y"), WindY, -10.f, 10.f, 0.f);
     MakeSliderRow(Content, TEXT("垂向 Z"), WindZ, -10.f, 10.f, 0.f);
-
-    // ---- 相机 ----
-    AddSectionHeader(Content, TEXT("相机"));
-    MakeSliderRow(Content, TEXT("默认相机 FOV"), CameraFov, 30.f, 170.f, 90.f);
 
     // ---- 时间模拟 ----
     AddSectionHeader(Content, TEXT("时间模拟"));
@@ -232,7 +217,6 @@ void USimConfigWidget::BuildPanel(ASimConfigManager* InManager)
     Sliders[WindX]->OnValueChanged.AddDynamic(this, &USimConfigWidget::OnSlider4);
     Sliders[WindY]->OnValueChanged.AddDynamic(this, &USimConfigWidget::OnSlider5);
     Sliders[WindZ]->OnValueChanged.AddDynamic(this, &USimConfigWidget::OnSlider6);
-    Sliders[CameraFov]->OnValueChanged.AddDynamic(this, &USimConfigWidget::OnSlider7);
 
     RefreshFromWorld();
 }
@@ -241,7 +225,6 @@ void USimConfigWidget::RefreshFromWorld()
 {
     if (UWorld* World = GetWorld())
     {
-        WeatherCheck->SetIsChecked(UWeatherLib::getIsWeatherEnabled(World));
         // 滑条下标 → 天气参数枚举（枚举顺序不同，需显式映射）
         const EWeatherParamScalar Params[] = {
             EWeatherParamScalar::WEATHER_PARAM_SCALAR_RAIN,
@@ -259,18 +242,17 @@ void USimConfigWidget::RefreshFromWorld()
     {
         PauseCheck->SetIsChecked(Sim->isPaused());
     }
-    // 风与 FOV 没有回读接口，保持用户上次输入
+    // 风没有回读接口，保持用户上次输入
     UpdateValueLabel(WindX);
     UpdateValueLabel(WindY);
     UpdateValueLabel(WindZ);
-    UpdateValueLabel(CameraFov);
     SetStatusText(TEXT(""));
 }
 
 void USimConfigWidget::TogglePanel()
 {
     bOpen = !bOpen;
-    TargetX = bOpen ? 16.f : PanelWidth + 60.f;
+    TargetX = bOpen ? 16.f : -(PanelWidth + 60.f);
     if (bOpen)
     {
         RefreshFromWorld();
@@ -284,7 +266,7 @@ void USimConfigWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime
     if (PanelSlot && !FMath::IsNearlyEqual(CurrentX, TargetX, 0.5f))
     {
         CurrentX = FMath::FInterpTo(CurrentX, TargetX, InDeltaTime, 12.f);
-        PanelSlot->SetPosition(FVector2D(CurrentX, 60.f));
+        PanelSlot->SetPosition(FVector2D(CurrentX, PanelTopY));
     }
 }
 
@@ -297,25 +279,10 @@ void USimConfigWidget::OnSlider3(float Value) { OnSliderChanged(Fog, Value); }
 void USimConfigWidget::OnSlider4(float Value) { OnSliderChanged(WindX, Value); }
 void USimConfigWidget::OnSlider5(float Value) { OnSliderChanged(WindY, Value); }
 void USimConfigWidget::OnSlider6(float Value) { OnSliderChanged(WindZ, Value); }
-void USimConfigWidget::OnSlider7(float Value) { OnSliderChanged(CameraFov, Value); }
 
 void USimConfigWidget::OnSliderChanged(ESliderIndex Index, float Value)
 {
     UpdateValueLabel(Index);
-    if (Index >= Rain && Index <= Fog && WeatherCheck && !WeatherCheck->IsChecked())
-    {
-        // 调天气滑条时自动打开天气特效，避免"拉了滑条没反应"的困惑
-        WeatherCheck->SetIsChecked(true);
-    }
-}
-
-void USimConfigWidget::OnWeatherEnabledChanged(bool bChecked)
-{
-    if (UWorld* World = GetWorld())
-    {
-        UWeatherLib::setWeatherEnabled(World, bChecked);
-        SetStatusText(bChecked ? TEXT("天气特效已启用") : TEXT("天气特效已关闭"));
-    }
 }
 
 void USimConfigWidget::OnPauseChanged(bool bChecked)
@@ -334,16 +301,18 @@ void USimConfigWidget::OnApplyLive()
         SetStatusText(TEXT("配置管理器未就绪"));
         return;
     }
+    // 天气随滑条值整体应用：四项均为 0 时自动关闭特效，否则启用（取代原"启用天气特效"复选框）
+    const bool bWeatherEnabled = Sliders[Rain]->GetValue() > 0.f || Sliders[Snow]->GetValue() > 0.f
+        || Sliders[Dust]->GetValue() > 0.f || Sliders[Fog]->GetValue() > 0.f;
     Manager->ApplyLive(
-        WeatherCheck ? WeatherCheck->IsChecked() : false,
+        bWeatherEnabled,
         Sliders[Rain]->GetValue(),
         Sliders[Snow]->GetValue(),
         Sliders[Dust]->GetValue(),
         Sliders[Fog]->GetValue(),
         FVector(Sliders[WindX]->GetValue(), Sliders[WindY]->GetValue(), Sliders[WindZ]->GetValue()),
-        Sliders[CameraFov]->GetValue(),
         PauseCheck ? PauseCheck->IsChecked() : false);
-    SetStatusText(TEXT("已应用：天气 / 风 / FOV / 暂停"));
+    SetStatusText(TEXT("已应用：天气 / 风 / 暂停"));
 }
 
 void USimConfigWidget::OnTimeMorning() { if (Manager.IsValid()) { Manager->ApplyTimeOfDay(0); SetStatusText(TEXT("时间已设为清晨 06:30")); } }

@@ -16,7 +16,6 @@
 // AirSim 运行时 API
 #include "SimMode/SimModeBase.h"
 #include "SimHUD/SimHUD.h"
-#include "PIPCamera.h"
 #include "Weather/WeatherLib.h"
 #include "common/AirSimSettings.hpp"
 #include "common/Settings.hpp"
@@ -127,7 +126,7 @@ void ASimConfigManager::CloseSettingsPanel()
 }
 
 void ASimConfigManager::ApplyLive(bool bWeatherEnabled, float Rain, float Snow, float Dust, float Fog,
-    const FVector& WindNed, float CameraFov, bool bPaused)
+    const FVector& WindNed, bool bPaused)
 {
     UWorld* World = GetWorld();
     if (!World)
@@ -152,16 +151,10 @@ void ASimConfigManager::ApplyLive(bool bWeatherEnabled, float Rain, float Snow, 
 
         // 暂停（AirSim 侧暂停物理，渲染与 UI 继续走）
         Sim->pause(bPaused);
-
-        // 默认相机 FOV（camera_name/vehicle_name 传空即默认载具默认相机）
-        if (APIPCamera* Camera = Sim->getCamera(msr::airlib::CameraDetails("", "")))
-        {
-            Camera->setCameraFoV(CameraFov);
-        }
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("SimConfig: 未找到 AirSim SimMode，风/暂停/FOV 未应用"));
+        UE_LOG(LogTemp, Warning, TEXT("SimConfig: 未找到 AirSim SimMode，风/暂停未应用"));
     }
 }
 
@@ -628,6 +621,42 @@ void ASimConfigManager::GetEntryParams(const FSimSettingsEntry& Entry, TArray<FS
         {
             OutParams.Insert({ TEXT("Enabled"), TEXT("true"), 0 }, 0);
         }
+
+        // 注入 FOV_Degrees 行：相机自身 CaptureSettings 场景项 > CameraDefaults 场景项 >
+        // 默认 90（AirSim 未配置时 FOV 为 nan，即引擎组件默认 90）
+        double FovValue = 90.0;
+        bool bFoundFov = false;
+        auto FindSceneFov = [&bFoundFov, &FovValue](const TSharedPtr<FJsonObject>& Section)
+        {
+            const TArray<TSharedPtr<FJsonValue>>* Arr = nullptr;
+            TSharedPtr<FJsonValue> Field = Section->TryGetField(TEXT("CaptureSettings"));
+            if (Field.IsValid() && Field->TryGetArray(Arr) && Arr)
+            {
+                for (const TSharedPtr<FJsonValue>& Elem : *Arr)
+                {
+                    if (const TSharedPtr<FJsonObject> Obj = AsJsonObject(Elem))
+                    {
+                        double ImageType = -1;
+                        Obj->TryGetNumberField(TEXT("ImageType"), ImageType);
+                        if (ImageType == 0 && Obj->TryGetNumberField(TEXT("FOV_Degrees"), FovValue))
+                        {
+                            bFoundFov = true;
+                            return;
+                        }
+                    }
+                }
+            }
+        };
+        FindSceneFov(Target);
+        if (!bFoundFov)
+        {
+            if (const TSharedPtr<FJsonObject> Defaults = NavigateObject(Root, { TEXT("CameraDefaults") }))
+            {
+                FindSceneFov(Defaults);
+            }
+        }
+        const int32 InsertIndex = (OutParams.Num() > 0 && OutParams[0].Key == TEXT("Enabled")) ? 1 : 0;
+        OutParams.Insert({ TEXT("FOV_Degrees"), FString::Printf(TEXT("%.1f"), FovValue), 1 }, InsertIndex);
     }
 }
 
@@ -670,8 +699,49 @@ bool ASimConfigManager::ApplyEntryParams(const FSimSettingsEntry& Entry, const T
         }
     }
 
-    // 应用键值（Type==3 为只读展示项，跳过）
+    // 相机条目：FOV_Degrees 不是相机对象的直接字段，而是写入该相机 CaptureSettings 的
+    // 全部元素（与运行时 setCameraFoV 对所有 ImageType 生效的语义一致）；
+    // 相机尚无 CaptureSettings 时补建 ImageType 0 的场景元素
+    // （AirSim 无该配置时本就全用结构体默认值，因此新建条目只多出 FOV 一个有效字段）
+    TArray<FSimSensorParam> RemainingParams;
+    float PendingFov = 0.f;
+    bool bApplyFov = false;
     for (const FSimSensorParam& Param : Params)
+    {
+        if (Entry.bCamera && Param.Key == TEXT("FOV_Degrees") && Param.Type != 3)
+        {
+            PendingFov = FCString::Atof(*Param.RawValue);
+            bApplyFov = true;
+            continue;
+        }
+        RemainingParams.Add(Param);
+    }
+    if (bApplyFov)
+    {
+        const TArray<TSharedPtr<FJsonValue>>* CaptureArray = nullptr;
+        TSharedPtr<FJsonValue> CaptureField = Target->TryGetField(TEXT("CaptureSettings"));
+        if (CaptureField.IsValid() && CaptureField->TryGetArray(CaptureArray) && CaptureArray && CaptureArray->Num() > 0)
+        {
+            for (const TSharedPtr<FJsonValue>& Elem : *CaptureArray)
+            {
+                if (const TSharedPtr<FJsonObject> CaptureObj = AsJsonObject(Elem))
+                {
+                    CaptureObj->SetNumberField(TEXT("FOV_Degrees"), PendingFov);
+                }
+            }
+        }
+        else
+        {
+            const TSharedPtr<FJsonObject> SceneCapture = MakeShared<FJsonObject>();
+            SceneCapture->SetNumberField(TEXT("ImageType"), 0);
+            SceneCapture->SetNumberField(TEXT("FOV_Degrees"), PendingFov);
+            Target->SetArrayField(TEXT("CaptureSettings"),
+                { MakeShared<FJsonValueObject>(SceneCapture) });
+        }
+    }
+
+    // 应用键值（Type==3 为只读展示项，跳过）
+    for (const FSimSensorParam& Param : RemainingParams)
     {
         if (Param.Type == 3 || Param.Key.IsEmpty())
         {

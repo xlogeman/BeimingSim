@@ -18,11 +18,12 @@ class UVerticalBox;
 
 /**
  * 仿真环境配置面板（纯 C++ 构建 UMG，无需 WBP 资产，样式与 DroneSwitchWidget 一致）。
- * 按 O 从屏幕右侧滑出，分组编辑 AirSim 运行环境参数，仅两个操作按钮：
+ * 按 O 从屏幕左侧滑出，分组编辑 AirSim 运行环境参数，仅两个操作按钮：
  *
- * - 【应用（即时生效）】天气（雨/雪/尘/雾）、风（NED m/s）、相机 FOV、暂停：
+ * - 【应用（即时生效）】天气（雨/雪/尘/雾）、风（NED m/s）、暂停：
  *   调用 AirSim 运行时 API（UWeatherLib / ASimModeBase setter），不重建 SimMode、
- *   不写 settings.json。
+ *   不写 settings.json。相机 FOV 属于各相机自身参数，在 settings.json 配置面板
+ *   （机型菜单"设置"按钮）对应载具相机条目下编辑。
  * settings.json 的对象级编辑在独立面板 SimSettingsWidget（机型菜单内各条目的设置按钮呼出）。
  */
 UCLASS()
@@ -51,9 +52,7 @@ protected:
     UFUNCTION() void OnSlider4(float Value);
     UFUNCTION() void OnSlider5(float Value);
     UFUNCTION() void OnSlider6(float Value);
-    UFUNCTION() void OnSlider7(float Value);
 
-    UFUNCTION() void OnWeatherEnabledChanged(bool bChecked);
     UFUNCTION() void OnPauseChanged(bool bChecked);
     UFUNCTION() void OnApplyLive();
 
@@ -74,7 +73,6 @@ private:
         WindX,
         WindY,
         WindZ,
-        CameraFov,
         SliderCount
     };
 
@@ -101,9 +99,6 @@ private:
     TArray<TObjectPtr<UTextBlock>> ValueLabels;
 
     UPROPERTY()
-    TObjectPtr<UCheckBox> WeatherCheck = nullptr;
-
-    UPROPERTY()
     TObjectPtr<UCheckBox> PauseCheck = nullptr;
 
     UPROPERTY()
@@ -112,7 +107,7 @@ private:
     TWeakObjectPtr<ASimConfigManager> Manager;
 
     bool bOpen = false;
-    float CurrentX = 460.f;
-    float TargetX = 460.f;
+    float CurrentX = -460.f;
+    float TargetX = -460.f;
     static constexpr float PanelWidth = 400.f;
 };

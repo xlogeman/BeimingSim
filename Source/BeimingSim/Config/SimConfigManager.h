@@ -26,7 +26,7 @@ struct FSimSettingsEntry
     int32 SensorType = 0;
     /** settings.json 中尚不存在该定义（当前用内置默认），应用时自动创建 */
     bool bSynthetic = false;
-    /** 载具相机条目（Vehicles.X.Cameras.Y）——面板为其注入 Enabled 开关（AirSimSettings 已支持解析） */
+    /** 载具相机条目（Vehicles.X.Cameras.Y）——面板为其注入 Enabled 开关与 FOV_Degrees 参数 */
     bool bCamera = false;
 };
 
@@ -44,11 +44,11 @@ struct FSimSensorParam
  * 由 BeimingSimGameMode 在 BeginPlay 自动生成，无需在关卡里摆放。
  *
  * 两个面板与两条生效通道：
- * - USimConfigWidget（O 键呼出，屏幕右侧滑出）：环境调整——天气/风/相机 FOV/暂停/时间模拟
+ * - USimConfigWidget（O 键呼出）：环境调整——天气/风/暂停/时间模拟
  *   即时生效（UWeatherLib 与 ASimModeBase 的运行时 setter）；时钟速度走 settings.json 重建；
  * - USimSettingsWidget（机型菜单各条目"设置"按钮呼出，屏幕居中）：settings.json 对象级编辑
  *   ——写回文件（自动备份 .bak）→ 调用 ASimHUD::RecreateSimMode() 原地销毁重建 SimMode
- *   （API server 一并重启）。
+ *   （API server 一并重启）。各载具相机条目支持 FOV 编辑（相机参数归属相机条目）。
  */
 UCLASS()
 class BEIMINGSIM_API ASimConfigManager : public AActor
@@ -60,9 +60,9 @@ public:
 
     virtual void BeginPlay() override;
 
-    /** 即时应用：天气/风（NED m/s）/默认相机 FOV/暂停（不重建 SimMode） */
+    /** 即时应用：天气/风（NED m/s）/暂停（不重建 SimMode）。相机 FOV 走 settings.json 相机条目编辑 */
     void ApplyLive(bool bWeatherEnabled, float Rain, float Snow, float Dust, float Fog,
-        const FVector& WindNed, float CameraFov, bool bPaused);
+        const FVector& WindNed, bool bPaused);
 
     /** 时间模拟预设：0 清晨 06:30 / 1 正午 12:00 / 2 黄昏 18:30 / 3 夜晚 22:00 / 其它=关闭 */
     void ApplyTimeOfDay(int32 PresetIndex);
@@ -100,7 +100,7 @@ public:
     static int32 DetectValueType(const FString& Value);
 
     /**
-     * 展开/收起环境配置面板（O 键，USimConfigWidget：天气/风/FOV/时间/暂停/时钟速度）。
+     * 展开/收起环境配置面板（O 键，USimConfigWidget：天气/风/时间/暂停/时钟速度）。
      */
     UFUNCTION()
     void TogglePanel();
