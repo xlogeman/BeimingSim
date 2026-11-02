@@ -194,17 +194,9 @@ void USimConfigWidget::BuildPanel(ASimConfigManager* InManager)
     Content->AddChildToVerticalBox(PauseRow)->SetPadding(FMargin(0, 4));
     PauseCheck = PauseEnabled;
 
-    // ---- 状态与操作按钮 ----
+    // ---- 状态提示 ----
     StatusLabel = MakeLabel(TEXT(""), 12, FLinearColor::Yellow);
     Content->AddChildToVerticalBox(StatusLabel)->SetPadding(FMargin(4, 8, 0, 2));
-
-    UHorizontalBox* BtnRow = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("BtnRow"));
-    UButton* ApplyBtn = MakeButton(TEXT("应用（即时生效）"), true);
-    ApplyBtn->OnClicked.AddDynamic(this, &USimConfigWidget::OnApplyLive);
-    UHorizontalBoxSlot* ApplySlot = BtnRow->AddChildToHorizontalBox(ApplyBtn);
-    ApplySlot->SetPadding(FMargin(2, 0));
-    ApplySlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
-    Box->AddChildToVerticalBox(BtnRow)->SetPadding(FMargin(0, 6, 0, 0));
 
     Box->AddChildToVerticalBox(MakeLabel(TEXT("O 展开 / 收起"), 12, FLinearColor::Gray))
         ->SetPadding(FMargin(4, 8, 0, 0));
@@ -283,6 +275,7 @@ void USimConfigWidget::OnSlider6(float Value) { OnSliderChanged(WindZ, Value); }
 void USimConfigWidget::OnSliderChanged(ESliderIndex Index, float Value)
 {
     UpdateValueLabel(Index);
+    ApplyLiveNow();
 }
 
 void USimConfigWidget::OnPauseChanged(bool bChecked)
@@ -294,11 +287,10 @@ void USimConfigWidget::OnPauseChanged(bool bChecked)
     }
 }
 
-void USimConfigWidget::OnApplyLive()
+void USimConfigWidget::ApplyLiveNow()
 {
     if (!Manager.IsValid())
     {
-        SetStatusText(TEXT("配置管理器未就绪"));
         return;
     }
     // 天气随滑条值整体应用：四项均为 0 时自动关闭特效，否则启用（取代原"启用天气特效"复选框）
@@ -312,7 +304,6 @@ void USimConfigWidget::OnApplyLive()
         Sliders[Fog]->GetValue(),
         FVector(Sliders[WindX]->GetValue(), Sliders[WindY]->GetValue(), Sliders[WindZ]->GetValue()),
         PauseCheck ? PauseCheck->IsChecked() : false);
-    SetStatusText(TEXT("已应用：天气 / 风 / 暂停"));
 }
 
 void USimConfigWidget::OnTimeMorning() { if (Manager.IsValid()) { Manager->ApplyTimeOfDay(0); SetStatusText(TEXT("时间已设为清晨 06:30")); } }

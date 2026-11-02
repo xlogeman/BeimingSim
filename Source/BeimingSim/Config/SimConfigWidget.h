@@ -18,9 +18,9 @@ class UVerticalBox;
 
 /**
  * 仿真环境配置面板（纯 C++ 构建 UMG，无需 WBP 资产，样式与 DroneSwitchWidget 一致）。
- * 按 O 从屏幕左侧滑出，分组编辑 AirSim 运行环境参数，仅两个操作按钮：
+ * 按 O 从屏幕左侧滑出，所有修改即时生效（拖动滑条实时应用，无需点击按钮）：
  *
- * - 【应用（即时生效）】天气（雨/雪/尘/雾）、风（NED m/s）、暂停：
+ * - 天气（雨/雪/尘/雾，全 0 自动关闭特效）、风（NED m/s）、暂停：
  *   调用 AirSim 运行时 API（UWeatherLib / ASimModeBase setter），不重建 SimMode、
  *   不写 settings.json。相机 FOV 属于各相机自身参数，在 settings.json 配置面板
  *   （机型菜单"设置"按钮）对应载具相机条目下编辑。
@@ -54,7 +54,6 @@ protected:
     UFUNCTION() void OnSlider6(float Value);
 
     UFUNCTION() void OnPauseChanged(bool bChecked);
-    UFUNCTION() void OnApplyLive();
 
     UFUNCTION() void OnTimeMorning();
     UFUNCTION() void OnTimeNoon();
@@ -83,6 +82,8 @@ private:
     UButton* MakeButton(const FString& Text, bool bPrimary = false);
     void AddSectionHeader(UVerticalBox* Parent, const FString& Title);
     void OnSliderChanged(ESliderIndex Index, float Value);
+    /** 把当前面板状态（天气/风/暂停）即时应用到 AirSim 运行时 */
+    void ApplyLiveNow();
     void UpdateValueLabel(ESliderIndex Index);
     void SetStatusText(const FString& Text);
 
