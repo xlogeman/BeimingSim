@@ -70,7 +70,10 @@ namespace airlib
 
         virtual float getAvgMotorOutput() const override
         {
-            return ((getMotorControlSignal(0) + getMotorControlSignal(1) + getMotorControlSignal(2) + getMotorControlSignal(3)) / 4);
+            float sum = 0;
+            for (uint16_t index = 0; index < params_->motor.motor_count; ++index)
+                sum += static_cast<float>(getMotorControlSignal(index));
+            return sum / params_->motor.motor_count;
         }
 
         virtual bool isRcConnected() const override
@@ -110,7 +113,7 @@ namespace airlib
         {
             IBoard::reset();
 
-            motor_output_.assign(params_->motor.motor_count, 0);
+            motor_output_.assign(params_->motor.motor_count + params_->motor.aux_output_count, 0);
             input_channels_.assign(params_->rc.channel_count, 0);
             is_connected_ = false;
         }

@@ -34,6 +34,15 @@ namespace airlib
         {
             readSettings(*vehicle_setting);
 
+            //match the firmware motor output count to the physical rotor layout
+            //(e.g. 2 for coaxial frames) so mixer/board/vector sizes all agree
+            params_.motor.motor_count = static_cast<uint16_t>(vehicle_params_->getParams().rotor_count);
+            if (params_.motor.motor_count == 2) {
+                //coaxial frame: add 2 auxiliary channels carrying roll/pitch commands
+                //for the tilting motor mounts (read back via getTiltCommand)
+                params_.motor.aux_output_count = 2;
+            }
+
             //TODO: set below properly for better high speed safety
             safety_params_.vel_to_breaking_dist = safety_params_.min_breaking_dist = 0;
 
@@ -105,6 +114,16 @@ namespace airlib
         virtual size_t getActuatorCount() const override
         {
             return vehicle_params_->getParams().rotor_count;
+        }
+        virtual void getTiltCommand(unsigned int rotor_index, real_T& tilt_about_x, real_T& tilt_about_y) const override
+        {
+            unused(rotor_index);
+            tilt_about_x = 0;
+            tilt_about_y = 0;
+            if (params_.motor.aux_output_count >= 2) {
+                tilt_about_x = board_->getMotorControlSignal(params_.motor.motor_count + 0); //roll tilt channel
+                tilt_about_y = board_->getMotorControlSignal(params_.motor.motor_count + 1); //pitch tilt channel
+            }
         }
         virtual void moveByRC(const RCData& rc_data) override
         {

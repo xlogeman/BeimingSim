@@ -92,6 +92,13 @@ namespace airlib
             //transfer new input values from controller to rotors
             for (uint rotor_index = 0; rotor_index < rotors_.size(); ++rotor_index) {
                 rotors_.at(rotor_index).setControlSignal(vehicle_api_->getActuation(rotor_index));
+
+                //tilting rotor mounts (coaxial frames): even rotors tilt +, odd rotors
+                //tilt -, producing net pitch/roll torque without net lateral force
+                real_T tilt_x = 0, tilt_y = 0;
+                vehicle_api_->getTiltCommand(rotor_index, tilt_x, tilt_y);
+                real_T tilt_sign = (rotor_index % 2 == 0) ? 1.0f : -1.0f;
+                rotors_.at(rotor_index).setTiltCommand(tilt_sign * tilt_x, tilt_sign * tilt_y);
             }
         }
 

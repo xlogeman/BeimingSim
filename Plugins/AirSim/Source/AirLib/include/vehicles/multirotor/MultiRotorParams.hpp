@@ -104,9 +104,14 @@ namespace airlib
         // Supported keys (all optional, unknown keys are ignored):
         //   Mass                 total vehicle mass in kg (inertia recomputed accordingly)
         //   MotorAssemblyWeight  weight of one motor+ESC+prop assembly in kg (default 0.055)
-        //   RotorCount           4 (QuadX), 6 (HexX) or 8 (OctoX); rebuilds rotor poses
-        //   ArmLengths           distance from center of mass to each motor in meters
+        //   RotorCount           2 (Coax), 4 (QuadX), 6 (HexX) or 8 (OctoX); rebuilds rotor poses
+        //   ArmLengths           distance from center of mass to each motor in meters (ignored for Coax)
         //   RotorZ               motor z-offset relative to center of mass in meters
+        //   RotorZTop/Bottom     Coax only: z-offset of upper/lower rotor from center of mass (meters);
+        //                        default to RotorZ when not given
+        //   MaxTiltAngle         Coax only: max tilt of the motor mounts for pitch/roll control,
+        //                        in radians (default 0.25 ≈ 14°; 0 disables tilting)
+        //   TiltFilterTc         Coax only: tilt servo low-pass time constant in seconds (default 0.05)
         //   BodyBoxX/Y/Z         core body box dimensions in meters (affects inertia)
         //   CT / CP / MaxRPM / PropDiameter  rotor parameters; max thrust is recomputed
         //   DragCoefficient      linear drag coefficient (angular drag is left unchanged)
@@ -146,6 +151,8 @@ namespace airlib
                                           std::pow(params.rotor_poses[0].position.x(), 2) +
                                           std::pow(params.rotor_poses[0].position.y(), 2)));
             real_T rotor_z = params.rotor_poses.empty() ? 0.0f : params.rotor_poses[0].position.z();
+            real_T rotor_z_top = rotor_z;
+            real_T rotor_z_bottom = rotor_z;
             bool rebuild_rotors = false;
             if (const real_T* v = findValue("RotorCount")) {
                 rotor_count = static_cast<uint>(*v);
@@ -157,18 +164,35 @@ namespace airlib
             }
             if (const real_T* v = findValue("RotorZ")) {
                 rotor_z = *v;
+                rotor_z_top = rotor_z;
+                rotor_z_bottom = rotor_z;
+                rebuild_rotors = true;
+            }
+            if (const real_T* v = findValue("RotorZTop")) {
+                rotor_z_top = *v;
+                rebuild_rotors = true;
+            }
+            if (const real_T* v = findValue("RotorZBottom")) {
+                rotor_z_bottom = *v;
                 rebuild_rotors = true;
             }
             if (rebuild_rotors) {
-                std::vector<real_T> arm_lengths(rotor_count, arm_length);
-                if (rotor_count == 4)
-                    initializeRotorQuadX(params.rotor_poses, rotor_count, arm_lengths.data(), rotor_z);
-                else if (rotor_count == 6)
-                    initializeRotorHexX(params.rotor_poses, rotor_count, arm_lengths.data(), rotor_z);
-                else if (rotor_count == 8)
-                    initializeRotorOctoX(params.rotor_poses, rotor_count, arm_lengths.data(), rotor_z);
-                else
-                    throw std::invalid_argument("PhysicsParams: RotorCount must be 4, 6 or 8");
+                if (rotor_count == 2) {
+                    initializeRotorCoax(params.rotor_poses, rotor_z_top, rotor_z_bottom);
+                }
+                else {
+                    std::vector<real_T> arm_lengths(rotor_count, arm_length);
+                    if (rotor_count == 4)
+                        initializeRotorQuadX(params.rotor_poses, rotor_count, arm_lengths.data(), rotor_z);
+                    else if (rotor_count == 6)
+                        initializeRotorHexX(params.rotor_poses, rotor_count, arm_lengths.data(), rotor_z);
+                    else if (rotor_count == 8)
+                        initializeRotorOctoX(params.rotor_poses, rotor_count, arm_lengths.data(), rotor_z);
+                    else
+                        throw std::invalid_argument("PhysicsParams: RotorCount must be 2, 4, 6 or 8");
+                }
+                //keep wrench vertex count in sync with the rebuilt rotor poses
+                params.rotor_count = rotor_count;
             }
 
             //rotor parameters
@@ -191,6 +215,12 @@ namespace airlib
             }
             if (rotor_params_changed)
                 params.rotor_params.calculateMaxThrust();
+
+            //tilting motor mounts (coaxial frames)
+            if (const real_T* v = findValue("MaxTiltAngle"))
+                params.rotor_params.max_tilt_angle = *v;
+            if (const real_T* v = findValue("TiltFilterTc"))
+                params.rotor_params.tilt_filter_tc = *v;
 
             //drag
             if (const real_T* v = findValue("DragCoefficient"))
@@ -245,6 +275,24 @@ namespace airlib
             }
             else
                 throw std::invalid_argument("Rotor count other than 4 is not supported by this method!");
+        }
+
+        /// Initializes 2 rotors in a coaxial (stacked) layout: rotor 0 is the upper
+        /// propeller turning CCW, rotor 1 is the lower propeller turning CW, both on
+        /// the vehicle's vertical axis (no arms). The z offsets are relative to the
+        /// center of mass and use the same sign convention as initializeRotorQuadX().
+        static void initializeRotorCoax(vector<RotorPose>& rotor_poses /* the result we are building */,
+                                        real_T rotor_z_top /* upper rotor z relative to center of gravity */,
+                                        real_T rotor_z_bottom /* lower rotor z relative to center of gravity */)
+        {
+            Vector3r unit_z(0, 0, -1); //NED frame
+            rotor_poses.clear();
+            rotor_poses.emplace_back(Vector3r(0, 0, rotor_z_top),
+                                     unit_z,
+                                     RotorTurningDirection::RotorTurningDirectionCCW);
+            rotor_poses.emplace_back(Vector3r(0, 0, rotor_z_bottom),
+                                     unit_z,
+                                     RotorTurningDirection::RotorTurningDirectionCW);
         }
 
         static void initializeRotorHexX(vector<RotorPose>& rotor_poses /* the result we are building */,

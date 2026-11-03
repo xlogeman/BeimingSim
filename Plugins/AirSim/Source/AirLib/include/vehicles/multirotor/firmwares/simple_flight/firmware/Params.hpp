@@ -23,6 +23,9 @@ public:
         float max_motor_output = 1;
         //if min_armed_output too low then noise in pitch/roll can destabilize quad copter when throttle is zero
         float min_angling_throttle = Params::min_armed_throttle() / 2;
+        //extra output channels beyond the motors, e.g. tilt servo commands for coaxial
+        //frames (channel 0 = roll, channel 1 = pitch, values in [-1, 1])
+        uint16_t aux_output_count = 0;
     } motor;
 
     struct Rc

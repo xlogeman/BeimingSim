@@ -83,6 +83,16 @@ Some methods may not be applicable to specific vehicle in which case an exceptio
             throw VehicleCommandNotImplementedException("getActuatorCount API is not supported for this vehicle");
         }
 
+        //tilt commands for vehicles with tilting rotor mounts (e.g. coaxial frames).
+        //values are in [-1, 1]; the physics body scales them by max_tilt_angle and
+        //applies them differentially (even rotors +, odd rotors -). default: no tilt.
+        virtual void getTiltCommand(unsigned int rotor_index, real_T& tilt_about_x, real_T& tilt_about_y) const
+        {
+            unused(rotor_index);
+            tilt_about_x = 0;
+            tilt_about_y = 0;
+        }
+
         virtual void getStatusMessages(std::vector<std::string>& messages)
         {
             unused(messages);

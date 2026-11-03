@@ -74,6 +74,16 @@ public:
         for (uint16_t motor_index = 0; motor_index < params_->motor.motor_count; ++motor_index)
             board_->writeOutput(motor_index, motor_outputs_.at(motor_index));
 
+        //auxiliary channels (e.g. coaxial tilt servos): expose raw roll/pitch commands
+        //on channels after the motors; consumed via getTiltCommand to tilt the rotors.
+        //in passthrough mode the controls are raw motor PWMs, so write neutral tilt
+        for (uint16_t aux_index = 0; aux_index < params_->motor.aux_output_count; ++aux_index) {
+            float aux_value = controller_->isLastGoalModeAllPassthrough()
+                                  ? 0.0f
+                                  : (aux_index == 0 ? output_controls.roll() : output_controls.pitch());
+            board_->writeOutput(params_->motor.motor_count + aux_index, aux_value);
+        }
+
         comm_link_->update();
     }
 

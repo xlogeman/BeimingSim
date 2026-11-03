@@ -52,6 +52,8 @@ namespace airlib
             air_density_sea_level_ = EarthUtils::getAirDensity(0.0f);
 
             control_signal_filter_.initialize(params_.control_signal_filter_tc, 0, 0);
+            tilt_x_filter_.initialize(params_.tilt_filter_tc, 0, 0);
+            tilt_y_filter_.initialize(params_.tilt_filter_tc, 0, 0);
 
             PhysicsBodyVertex::initialize(position, normal); //call base initializer
         }
@@ -60,6 +62,14 @@ namespace airlib
         void setControlSignal(real_T control_signal)
         {
             control_signal_filter_.setInput(Utils::clip(control_signal, 0.0f, 1.0f));
+        }
+
+        //tilting rotor mounts (coaxial frames): command in [-1, 1] is scaled to
+        //±max_tilt_angle about the body x (roll tilt) / y (pitch tilt) axes
+        void setTiltCommand(real_T tilt_about_x, real_T tilt_about_y)
+        {
+            tilt_x_filter_.setInput(Utils::clip(tilt_about_x, -1.0f, 1.0f));
+            tilt_y_filter_.setInput(Utils::clip(tilt_about_y, -1.0f, 1.0f));
         }
 
         Output getOutput() const
@@ -76,6 +86,8 @@ namespace airlib
             updateEnvironmentalFactors();
 
             control_signal_filter_.reset();
+            tilt_x_filter_.reset();
+            tilt_y_filter_.reset();
 
             setOutput(output_, params_, control_signal_filter_, turning_direction_);
         }
@@ -84,6 +96,10 @@ namespace airlib
         {
             //update environmental factors before we call base
             updateEnvironmentalFactors();
+
+            //update tilt filters first so setWrench below uses this step's tilt angles
+            tilt_x_filter_.update(delta);
+            tilt_y_filter_.update(delta);
 
             //this will in turn call setWrench
             PhysicsBodyVertex::update(delta);
@@ -110,6 +126,17 @@ namespace airlib
         virtual void setWrench(Wrench& wrench) override
         {
             Vector3r normal = getNormal();
+
+            //tilt the thrust/torque axis if tilting rotor mounts are enabled
+            //(max_tilt_angle defaults to 0 for regular multirotors)
+            if (params_.max_tilt_angle > 0) {
+                real_T angle_x = tilt_x_filter_.getOutput() * params_.max_tilt_angle; //roll tilt, about body x
+                real_T angle_y = tilt_y_filter_.getOutput() * params_.max_tilt_angle; //pitch tilt, about body y
+                Quaternionr tilt_q = Quaternionr(AngleAxisr(angle_y, Vector3r(0, 1, 0))) *
+                                     Quaternionr(AngleAxisr(angle_x, Vector3r(1, 0, 0)));
+                normal = VectorMath::rotateVector(normal, tilt_q, true);
+            }
+
             //forces and torques are proportional to air density: http://physics.stackexchange.com/a/32013/14061
             wrench.force = normal * output_.thrust * air_density_ratio_;
             wrench.torque = normal * output_.torque_scaler * air_density_ratio_; //TODO: try using filtered control here
@@ -138,6 +165,8 @@ namespace airlib
         RotorTurningDirection turning_direction_;
         RotorParams params_;
         FirstOrderFilter<real_T> control_signal_filter_;
+        FirstOrderFilter<real_T> tilt_x_filter_;
+        FirstOrderFilter<real_T> tilt_y_filter_;
         const Environment* environment_ = nullptr;
         real_T air_density_sea_level_, air_density_ratio_;
         Output output_;

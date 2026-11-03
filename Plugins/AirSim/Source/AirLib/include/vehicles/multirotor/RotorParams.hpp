@@ -41,6 +41,8 @@ namespace airlib
         real_T propeller_diameter = 0.2286f; //diameter in meters, default is for DJI Phantom 2
         real_T propeller_height = 1 / 100.0f; //height of cylindrical area when propeller rotates, 1 cm
         real_T control_signal_filter_tc = 0.005f; //time constant for low pass filter
+        real_T max_tilt_angle = 0; //max tilt of rotor mount about body x/y axes in radians (coaxial tilting mounts, 0 = disabled)
+        real_T tilt_filter_tc = 0.05f; //time constant for the tilt (servo) low pass filter
 
         real_T revolutions_per_second;
         real_T max_speed; // in radians per second
