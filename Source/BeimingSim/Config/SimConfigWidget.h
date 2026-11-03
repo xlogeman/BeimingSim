@@ -41,6 +41,9 @@ public:
     /** 展开/收起面板（带滑动动画） */
     void TogglePanel();
 
+    /** 面板是否处于展开状态（ESC 关闭逻辑用） */
+    bool IsOpen() const { return bOpen; }
+
 protected:
     virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
 

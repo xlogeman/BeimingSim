@@ -32,6 +32,12 @@ public:
 
     virtual void BeginPlay() override;
 
+    /** 菜单是否处于展开状态（ESC 关闭逻辑用） */
+    bool IsMenuOpen() const;
+
+    /** 收起菜单（已收起时无操作）；settings.json 配置面板随 OnMenuToggled 联动收起 */
+    void CloseMenu();
+
     /** 自动扫描的根目录（递归），其中所有 AFlyingPawn 子类蓝图都会出现在菜单里 */
     UPROPERTY(EditAnywhere, Category = "DroneSwitch")
     FString ScanPath = TEXT("/Game/UAV");

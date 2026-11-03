@@ -31,7 +31,7 @@ namespace
     // 面板专属尺寸常量（配色与通用控件样式见 Config/SimPanelStyle.h）
     constexpr float NameWidth = 110.f;
     constexpr float ValueWidth = 52.f;
-    constexpr float ScrollHeight = 440.f;
+    constexpr float ScrollHeight = 445.f;
     // 面板顶部距屏幕上方的固定距离（整体位置下移，不再贴顶）
     constexpr float PanelTopY = 260.f;
 }

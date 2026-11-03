@@ -80,12 +80,27 @@ void ASimConfigManager::BindOpenKey()
     if (PC && PC->InputComponent)
     {
         PC->InputComponent->BindKey(EKeys::O, IE_Pressed, this, &ASimConfigManager::TogglePanelFromKey);
+        // ESC：收起当前打开的配置面板（与 DroneModelSwitcher 的菜单收起绑定并存，各关各的）
+        PC->InputComponent->BindKey(EKeys::Escape, IE_Pressed, this, &ASimConfigManager::OnEscapePressed);
     }
     else
     {
         // PlayerController 尚未就绪时稍后重试（与 DroneModelSwitcher 的 Tab 绑定同一模式）
         GetWorldTimerManager().SetTimer(BindRetryTimer, this,
             &ASimConfigManager::BindOpenKey, 1.0f, false);
+    }
+}
+
+void ASimConfigManager::OnEscapePressed()
+{
+    // 打开了啥就关啥：settings.json 面板与环境面板互不依赖，各自独立收起
+    if (SettingsWidget && SettingsWidget->IsOpen())
+    {
+        SettingsWidget->ClosePanel();
+    }
+    if (PanelWidget && PanelWidget->IsOpen())
+    {
+        PanelWidget->TogglePanel();
     }
 }
 

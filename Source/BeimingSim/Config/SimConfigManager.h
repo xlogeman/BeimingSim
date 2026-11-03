@@ -125,6 +125,9 @@ private:
     UFUNCTION()
     void TogglePanelFromKey();
 
+    /** ESC：收起本管理器中所有处于展开状态的面板（settings.json 面板 + 环境面板） */
+    void OnEscapePressed();
+
     /** 解析当前 settings.json 为 UE JSON 根对象，失败返回空并填 OutError */
     TSharedPtr<FJsonObject> LoadSettingsRoot(FString* OutError = nullptr) const;
     /** 备份现有文件（.bak）→ 写入新文本 → 同步到 Settings 单例 */

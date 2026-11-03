@@ -47,6 +47,9 @@ public:
     /** 收起面板（机型菜单关闭时联动调用） */
     void ClosePanel() { bOpen = false; }
 
+    /** 面板是否处于展开状态（ESC 关闭逻辑用） */
+    bool IsOpen() const { return bOpen; }
+
 protected:
     virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
 

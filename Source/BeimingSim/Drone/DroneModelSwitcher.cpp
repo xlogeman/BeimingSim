@@ -276,6 +276,8 @@ void ADroneModelSwitcher::BindTabKey()
     if (PC && PC->InputComponent)
     {
         PC->InputComponent->BindKey(EKeys::Tab, IE_Pressed, this, &ADroneModelSwitcher::ToggleMenu);
+        // ESC：收起展开中的机型菜单（settings.json 配置面板随 OnMenuToggled 联动收起）
+        PC->InputComponent->BindKey(EKeys::Escape, IE_Pressed, this, &ADroneModelSwitcher::CloseMenu);
     }
     else
     {
@@ -298,6 +300,19 @@ void ADroneModelSwitcher::ToggleMenu()
         bInitialSelectionSynced = true;
     }
     if (MenuWidget)
+    {
+        MenuWidget->ToggleMenu();
+    }
+}
+
+bool ADroneModelSwitcher::IsMenuOpen() const
+{
+    return MenuWidget && MenuWidget->IsOpen();
+}
+
+void ADroneModelSwitcher::CloseMenu()
+{
+    if (IsMenuOpen() && MenuWidget)
     {
         MenuWidget->ToggleMenu();
     }
