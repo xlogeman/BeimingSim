@@ -42,6 +42,13 @@ public:
     // BEIMING patch: 返回当前实际生效的 settings.json 完整路径
     // （查找顺序与 getSettingsText 一致：命令行 → 可执行文件目录 → LaunchDir → 文档目录）
     FString getSettingsFilePath() const;
+    // BEIMING patch: 机型级配置文件。默认 "settings.json"；机型切换时由 DroneModelSwitcher
+    // 覆盖为 "settings_<机型>.json"（放在同一目录），getSettingsText / getSettingsFilePath
+    // 均以它为文件名按原查找顺序定位（命令行 -settings= 仍最高优先）
+    FString ActiveSettingsFileName = TEXT("settings.json");
+    const FString& GetActiveSettingsFileName() const { return ActiveSettingsFileName; }
+    /** BEIMING patch: 切换生效的 settings 文件并原地重建 SimMode（重读文件、重启 API server） */
+    void SetSettingsFileAndRecreate(const FString& FileName);
 
     ASimHUD();
     virtual void BeginPlay() override;

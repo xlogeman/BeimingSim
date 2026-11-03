@@ -70,6 +70,14 @@ private:
     int32 GetCurrentModelIndex() const;
     /** 通过 AirSim SimMode 重置仿真：无人机瞬移回初始起飞坐标并重置飞控/物理 */
     void ResetSimulation();
+
+    /**
+     * 机型级配置切换（BEIMING）：Documents/AirSim 下存在 settings_<机型>.json 时，
+     * 把它设为 AirSim 当前生效的 settings 文件并原地重建 SimMode（该机型的
+     * 传感器/PhysicsParams/相机等配置随之生效）；不存在则沿用默认 settings.json。
+     * 两种情况最后都会整体重置仿真（重建场景下延迟到 SimMode 重建完成后执行）。
+     */
+    void SwitchModelSettings(const FString& ModelName);
     void ApplyAppearanceFromBlueprint(AFlyingPawn* Pawn, UClass* SourceClass);
 
     UFUNCTION()
@@ -112,6 +120,8 @@ private:
     FTimerHandle TabBindRetryTimer;
     FTimerHandle ThumbnailTimer;
     FTimerHandle SyncSelectionTimer;
+    /** 切换机型配置文件重建 SimMode 后，延迟执行整体重置（重建本身延迟一帧完成） */
+    FTimerHandle ModelSettingsResetTimer;
     /** 初始选中态是否已同步完成（完成后不再重试/兜底） */
     bool bInitialSelectionSynced = false;
     int32 SyncSelectionAttempts = 0;

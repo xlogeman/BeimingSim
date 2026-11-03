@@ -263,17 +263,20 @@ FString ASimHUD::getSettingsFilePath() const
         return FPaths::ConvertRelativePathToFull(settingsPathFString);
     }
 
-    FString path = FString(msr::airlib::Settings::getExecutableFullPath("settings.json").c_str());
+    // BEIMING patch: 按"当前生效文件名"查找（默认 settings.json，机型切换时为 settings_<机型>.json）
+    const FString FileName = ActiveSettingsFileName;
+
+    FString path = FString(msr::airlib::Settings::getExecutableFullPath(TCHAR_TO_UTF8(*FileName)).c_str());
     if (FPaths::FileExists(path))
         return FPaths::ConvertRelativePathToFull(path);
 
-    path = getLaunchPath("settings.json");
+    path = getLaunchPath(TCHAR_TO_UTF8(*FileName));
     if (FPaths::FileExists(path))
         return path;
 
-    // 未找到任何 settings.json 时返回文档目录路径（与 createDefaultSettingsFile 的落盘位置一致）
+    // 未找到任何 settings 文件时返回文档目录路径（与 createDefaultSettingsFile 的落盘位置一致）
     return FPaths::ConvertRelativePathToFull(
-        FString(msr::airlib::Settings::getUserDirectoryFullPath("settings.json").c_str()));
+        FString(msr::airlib::Settings::getUserDirectoryFullPath(TCHAR_TO_UTF8(*FileName)).c_str()));
 }
 
 void ASimHUD::RecreateSimMode()
@@ -288,6 +291,15 @@ void ASimHUD::RecreateSimMode()
     // 再按 BeginPlay 相同顺序重新读入 settings.json 并重建 SimMode
     GetWorldTimerManager().SetTimerForNextTick(
         FTimerDelegate::CreateWeakLambda(this, [this]() { recreateSimModeInternal(); }));
+}
+
+void ASimHUD::SetSettingsFileAndRecreate(const FString& FileName)
+{
+    // BEIMING patch: 覆盖"当前生效文件名"后重建 SimMode。
+    // 空串回退默认 settings.json；重建延迟一帧执行（见 RecreateSimMode），
+    // 因此 ActiveSettingsFileName 必须是成员（recreateSimModeInternal 下一帧才读取）。
+    ActiveSettingsFileName = FileName.IsEmpty() ? TEXT("settings.json") : FileName;
+    RecreateSimMode();
 }
 
 void ASimHUD::recreateSimModeInternal()
@@ -418,10 +430,12 @@ FString ASimHUD::getLaunchPath(const std::string& filename)
 
 bool ASimHUD::getSettingsText(std::string& settingsText)
 {
+    // BEIMING patch: 按"当前生效文件名"查找（默认 settings.json，机型切换时为 settings_<机型>.json）
+    const std::string FileName = TCHAR_TO_UTF8(*ActiveSettingsFileName);
     return (getSettingsTextFromCommandLine(settingsText) ||
-            readSettingsTextFromFile(FString(msr::airlib::Settings::getExecutableFullPath("settings.json").c_str()), settingsText) ||
-            readSettingsTextFromFile(getLaunchPath("settings.json"), settingsText) ||
-            readSettingsTextFromFile(FString(msr::airlib::Settings::Settings::getUserDirectoryFullPath("settings.json").c_str()), settingsText));
+            readSettingsTextFromFile(FString(msr::airlib::Settings::getExecutableFullPath(FileName).c_str()), settingsText) ||
+            readSettingsTextFromFile(getLaunchPath(FileName), settingsText) ||
+            readSettingsTextFromFile(FString(msr::airlib::Settings::Settings::getUserDirectoryFullPath(FileName).c_str()), settingsText));
 }
 
 // Attempts to parse the settings file path or the settings text from the command line

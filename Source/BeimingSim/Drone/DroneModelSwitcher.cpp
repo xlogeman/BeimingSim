@@ -18,6 +18,10 @@
 #include "Vehicles/Multirotor/FlyingPawn.h"
 // AirSim SimMode：提供 reset() 整体重置（回到初始位姿 + 飞控/物理重置）
 #include "SimMode/SimModeBase.h"
+// AirSim SimHUD：机型切换时覆盖其"生效 settings 文件名"并重建 SimMode
+#include "SimHUD/SimHUD.h"
+// AirLib：获取 Documents/AirSim 用户配置目录（与 settings.json 的默认落盘位置一致）
+#include "common/Settings.hpp"
 // 仿真配置管理器：菜单内"仿真设置"按钮唤出其居中配置面板
 #include "Config/SimConfigManager.h"
 
@@ -415,21 +419,71 @@ void ADroneModelSwitcher::ApplyModel(int32 Index)
         return;
     }
     ApplyAppearanceFromBlueprint(Pawn, ModelClass);
-    // 换外观后整体重置：无人机回到初始起飞坐标、从空中掉落（等效重新点击 Play）
-    ResetSimulation();
+    const FString Name = DisplayNames.IsValidIndex(Index) ? DisplayNames[Index]
+        : DiscoveredClasses[Index].ToSoftObjectPath().GetAssetName();
+    // 换外观后按机型切换 settings 文件并整体重置（等效重新点击 Play）：
+    // 存在 settings_<机型>.json 时传感器/PhysicsParams 等按新机型配置重建生效
+    SwitchModelSettings(Name);
     if (MenuWidget)
     {
         MenuWidget->HighlightSelected(Index);
     }
 
-    const FString Name = DisplayNames.IsValidIndex(Index) ? DisplayNames[Index]
-        : DiscoveredClasses[Index].ToSoftObjectPath().GetAssetName();
     if (GEngine)
     {
         GEngine->AddOnScreenDebugMessage((uint64)GetUniqueID() + Index + 1, 3.f, FColor::Green,
             FString::Printf(TEXT("外观已切换为 %s"), *Name));
     }
     UE_LOG(LogTemp, Log, TEXT("DroneSwitcher: 外观已切换为 %s"), *Name);
+}
+
+void ADroneModelSwitcher::SwitchModelSettings(const FString& ModelName)
+{
+    ASimHUD* HUD = nullptr;
+    for (TActorIterator<ASimHUD> It(GetWorld()); It; ++It)
+    {
+        HUD = *It;
+        break;
+    }
+    if (!HUD)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("DroneSwitcher: 未找到 AirSim SimHUD，仅重置仿真、不切换配置文件"));
+        ResetSimulation();
+        return;
+    }
+
+    // 每机型一个配置文件（与默认 settings.json 同目录）：
+    //   Documents/AirSim/settings.json          —— 默认/共用配置
+    //   Documents/AirSim/settings_<机型>.json   —— 机型专属配置（可选）
+    FString SafeName = FPaths::MakeValidFileName(ModelName);
+    const FString ModelFileName = FString::Printf(TEXT("settings_%s.json"), *SafeName);
+    const FString ModelFilePath = FPaths::ConvertRelativePathToFull(
+        FString(msr::airlib::Settings::getUserDirectoryFullPath(TCHAR_TO_UTF8(*ModelFileName)).c_str()));
+
+    FString TargetFile = TEXT("settings.json");
+    if (FPaths::FileExists(ModelFilePath))
+    {
+        TargetFile = ModelFileName;
+    }
+    else
+    {
+        UE_LOG(LogTemp, Log, TEXT("DroneSwitcher: 未找到 %s，机型 %s 沿用默认 settings.json"),
+            *ModelFilePath, *ModelName);
+    }
+
+    // 生效文件没变（如重复选同一机型）时无需重建 SimMode，直接整体重置
+    if (HUD->GetActiveSettingsFileName().Equals(TargetFile, ESearchCase::IgnoreCase))
+    {
+        ResetSimulation();
+        return;
+    }
+
+    // 覆盖 HUD 的"生效文件名"并原地重建 SimMode（重读文件、重启 API server，延迟一帧完成）；
+    // 重置延迟到重建之后，让无人机回到新 SimMode 的初始位姿
+    UE_LOG(LogTemp, Log, TEXT("DroneSwitcher: 机型 %s 切换配置文件为 %s，重建 SimMode"), *ModelName, *TargetFile);
+    HUD->SetSettingsFileAndRecreate(TargetFile);
+    GetWorldTimerManager().SetTimer(ModelSettingsResetTimer,
+        FTimerDelegate::CreateWeakLambda(this, [this]() { ResetSimulation(); }), 0.5f, false);
 }
 
 void ADroneModelSwitcher::ApplyAppearanceFromBlueprint(AFlyingPawn* Pawn, UClass* SourceClass)
