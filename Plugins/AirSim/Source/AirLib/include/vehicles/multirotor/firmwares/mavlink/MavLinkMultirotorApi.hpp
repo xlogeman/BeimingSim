@@ -325,6 +325,16 @@ namespace airlib
             return rotor_controls_[rotor_index];
         }
 
+        virtual void getTiltCommand(unsigned int rotor_index, real_T& tilt_about_x, real_T& tilt_about_y) const override
+        {
+            unused(rotor_index);
+            std::lock_guard<std::mutex> guard(hil_controls_mutex_);
+            //raw (pre-normalization) values on actuator channels 2/3 are interpreted
+            //as tilt servo commands in [-1, 1] for coaxial frames with tilting mounts
+            tilt_about_x = Utils::clip(raw_aux_controls_[0], -1.0f, 1.0f);
+            tilt_about_y = Utils::clip(raw_aux_controls_[1], -1.0f, 1.0f);
+        }
+
         virtual size_t getActuatorCount() const override
         {
             return RotorControlsCount;
@@ -1581,6 +1591,8 @@ namespace airlib
                 for (size_t i = 0; i < Utils::length(rotor_controls_); ++i) {
                     rotor_controls_[i] = 0;
                 }
+                raw_aux_controls_[0] = 0;
+                raw_aux_controls_[1] = 0;
             }
         }
 
@@ -1699,6 +1711,15 @@ namespace airlib
                     else {
                         rotor_controls_[i] = 0;
                     }
+                }
+                if (isarmed) {
+                    //keep raw (pre-normalization) servo channels 2/3 for coaxial tilt mounts
+                    raw_aux_controls_[0] = HilActuatorControlsMessage.controls[2];
+                    raw_aux_controls_[1] = HilActuatorControlsMessage.controls[3];
+                }
+                else {
+                    raw_aux_controls_[0] = 0;
+                    raw_aux_controls_[1] = 0;
                 }
                 if (isarmed) {
                     normalizeRotorControls();
@@ -1910,6 +1931,8 @@ namespace airlib
             is_api_control_enabled_ = false;
             thrust_controller_ = PidController();
             Utils::setValue(rotor_controls_, 0.0f);
+            raw_aux_controls_[0] = 0;
+            raw_aux_controls_[1] = 0;
             was_reset_ = false;
             received_actuator_controls_ = false;
             lock_step_active_ = false;
@@ -1942,6 +1965,7 @@ namespace airlib
         mutable std::mutex hil_controls_mutex_;
         AirSimSettings::MavLinkConnectionInfo connection_info_;
         float rotor_controls_[RotorControlsCount];
+        float raw_aux_controls_[2]; //raw pre-normalized values of actuator channels 2/3 (coax tilt servos)
         bool is_simulation_mode_;
 
     private: //variables
