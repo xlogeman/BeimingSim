@@ -209,8 +209,10 @@ void ASimHUD::setUnrealEngineSettings()
     //GetWorld()->GetGameViewport()->GetEngineShowFlags()->SetMotionBlur(false);
 
     //use two different methods to set console var because sometime it doesn't seem to work
+    //BEIMING patch: 以 SetByConsole 优先级设置, 避免机型切换重建 SimMode 时,
+    //ExecuteConsoleCommand(同值, 高优先级)已登记后此处 SetByCode 再设被拒并刷警告
     static const auto custom_depth_var = IConsoleManager::Get().FindConsoleVariable(TEXT("r.CustomDepth"));
-    custom_depth_var->Set(3);
+    custom_depth_var->Set(3, ECVF_SetByConsole);
 
     //Equivalent to enabling Custom Stencil in Project > Settings > Rendering > Postprocessing
     UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), FString("r.CustomDepth 3"));

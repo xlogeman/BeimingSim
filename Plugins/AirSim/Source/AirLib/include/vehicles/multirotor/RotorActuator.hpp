@@ -125,9 +125,16 @@ namespace airlib
     protected:
         virtual void setWrench(Wrench& wrench) override
         {
+            //BEIMING coax patch: 反扭矩始终沿堆叠轴(未倾斜法向)。
+            //共轴"偶/奇桨反向倾转"方案中, 若反扭矩跟随倾斜法向, 上下桨反扭矩的
+            //水平分量会相加, 产生 2*T_r*sin(θ) 的寄生滚转<->俯仰交叉力矩
+            //(倾斜11°时约为满舵权限的40%), 表现为悬停圆锥摆。真实共轴机
+            //上下桨反扭矩共轴反向、严格抵消; 力偶仍由倾斜推力的 r×F 提供。
+            //常规多旋翼 max_tilt_angle=0, 此改动无任何影响。
+            Vector3r torque_axis = getNormal();
             Vector3r normal = getNormal();
 
-            //tilt the thrust/torque axis if tilting rotor mounts are enabled
+            //tilt the thrust axis if tilting rotor mounts are enabled
             //(max_tilt_angle defaults to 0 for regular multirotors)
             if (params_.max_tilt_angle > 0) {
                 real_T angle_x = tilt_x_filter_.getOutput() * params_.max_tilt_angle; //roll tilt, about body x
@@ -139,7 +146,7 @@ namespace airlib
 
             //forces and torques are proportional to air density: http://physics.stackexchange.com/a/32013/14061
             wrench.force = normal * output_.thrust * air_density_ratio_;
-            wrench.torque = normal * output_.torque_scaler * air_density_ratio_; //TODO: try using filtered control here
+            wrench.torque = torque_axis * output_.torque_scaler * air_density_ratio_; //TODO: try using filtered control here
         }
 
     private: //methods
