@@ -73,6 +73,34 @@ BeimingSim/
 配对的 PX4 侧补丁与参数流程见下节，配套机型档案在 flylab 仓库
 `ros2_ws/src/flylab_flight/configs/vehicles/`。
 
+## 修改 AirLib 源码后必须重编 AirLib.lib
+
+`Plugins/AirSim/Source/AirLib/` 是**预编译静态库**（`lib/x64/Debug|Release/AirLib.lib`，
+`AirSim.Build.cs` 按 Target 配置选用），UE 的编译（UBT）**不会重编它**——
+直接在 VS 里编 BeimingSim 会显示 `Target is up to date, 0 actions`，
+改动看似生效实则二进制里还是旧代码（典型症状：改了代码但崩溃/行为原样复现）。
+
+改动 `Source/AirLib/` 下任何源码/头文件后，按顺序执行（PowerShell）：
+
+```powershell
+# 1. 重编 AirLib 库（改头文件导致类布局变化时必须用 /t:Rebuild 全量）
+& "D:\VisualStudio\MSBuild\Current\Bin\MSBuild.exe" `
+    "Plugins\AirSim\Source\AirLib\AirLib.vcxproj" `
+    /t:Rebuild /p:Configuration=Release /p:Platform=x64 /m
+
+# 2. 删 AirSim 模块中间产物（改了 AirLib 头文件时必须，防新旧混链接）
+Remove-Item -Recurse -Force Intermediate\Build\Win64\UnrealEditor\*\Development\AirSim
+
+# 3. 再正常编译 UE（VS 里构建，或命令行）
+dotnet "D:\UE_5.8\Engine\Binaries\DotNET\UnrealBuildTool\UnrealBuildTool.dll" `
+    BeimingSimEditor Win64 Development -Project="$PWD\BeimingSim.uproject" -WaitMutex
+```
+
+- MSBuild 的 Debug/Release 与 UE Target 对应：`Debug` 配置用 Debug lib，其余用 Release lib
+- MSBuild 增量判断偶尔失灵（源码变了却跳过），怀疑没生效就核对
+  `lib\x64\Release\AirLib.lib` 的修改时间，或直接 `/t:Rebuild`
+- 只改 UE 模块源码（`Source/AirSim/`、`Source/BeimingSim/`）则无需此流程，正常编译即可
+
 ## 新增共轴双旋翼机型指南
 
 控制链路（PX4 Custom 布局 → HIL 通道 0/1=上下桨油门、2/3=倾转舵机 → 共轴倾转物理）是架构级的，
