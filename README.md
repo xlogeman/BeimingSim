@@ -64,6 +64,11 @@ BeimingSim/
 
 - UE 5.8 兼容与功能增强：相机 `Enabled:false`、机型热切换重建 SimMode、同名 Actor 冲突加后缀、
   F10 天气菜单移除、`AnnotationComponent` 兼容、`SimHUD` 控制台变量优先级等
+
+> **配机型参数必读**：原版 `MavLinkMultirotorApi::normalizeRotorControls` 对 PX4 电机通道做
+> `sim_ctrl = 0.8u + 0.2` 变换，即 PX4 actuator 输出 u ≠ 仿真桨油门。因此
+> `MPC_THR_HOVER = (mg/(N×T_max) − 0.2) / 0.8`（物理悬停桨油门换算成 actuator 值），
+> 且推力增量增益被 PX4 高估 `1/r = (0.8+0.2/hover)/0.8` 倍（Z 环增益需按此补偿）。
 - **共轴双旋翼支持**（架构级，新增共轴机型无需再改代码）：
   - `RotorActuator/MultiRotorParams/MultiRotorPhysicsBody/RotorParams`：`PhysicsParams` 支持 `RotorCount:2` 共轴布局、
     倾转电机架（偶/奇桨反向倾转出俯仰/滚转力偶）、反扭矩固定沿堆叠轴（避免交叉耦合，见 `RotorActuator.hpp` 注释）

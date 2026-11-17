@@ -1140,7 +1140,7 @@ namespace airlib
 
         virtual void normalizeRotorControls()
         {
-            //if rotor controls are in not in 0-1 range then they are in -1 to 1 range in which case
+            //if rotor controls are not in 0-1 range then they are in -1 to 1 range in which case
             //we normalize them to 0 to 1 for PX4
             if (!is_controls_0_1_) {
                 // change -1 to 1 to 0 to 1.
@@ -1154,6 +1154,15 @@ namespace airlib
                 for (size_t i = 0; i < Utils::length(rotor_controls_); ++i) {
                     rotor_controls_[i] = Utils::clip(0.8f * rotor_controls_[i] + 0.20f, 0.0f, 1.0f);
                 }
+                //BEIMING note (2026-11-17): PX4 actuator u is NOT the simulated rotor
+                //throttle -- sim_ctrl = 0.8*u + 0.2. Consequences when configuring a
+                //vehicle (see airframe files for worked examples):
+                //  1) MPC_THR_HOVER = (mg/(rotor_count*max_thrust) - 0.2) / 0.8
+                //     (the physical hover prop throttle converted to actuator units)
+                //  2) the thrust incremental gain PX4 assumes is overstated by
+                //     r = 0.8/(0.8 + 0.2/hover) (e.g. 0.375 at hover 0.15) -- Z-loop
+                //     gains must be divided by r to restore bandwidth
+                //A pass-through variant of this function was tried and reverted.
             }
         }
 
